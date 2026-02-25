@@ -33,6 +33,7 @@ def download_datasets(storage_options):
 def clean_and_merge(_df_world, datasets):
     merged = {}
     for name, df in datasets.items():
+        #temporary: just gets rid of null codes and regional codes since there is a region column included in the gpd dataframe
         df_clean = df[(~df.code.isnull()) & (df.code != 'OWID_WRL')].copy()
         df_clean = df_clean.rename(columns={df_clean.columns[-1]: name})
         merged[name] = pd.merge(_df_world, df_clean, left_on='ISO_A3', right_on='code', how='right')[
@@ -42,6 +43,10 @@ def clean_and_merge(_df_world, datasets):
     return merged
 
 class OwidData:
+    '''This is the class that actually handles the app building, it inherits the data from OwidData, the functions that you see below are my suggestion for developing the app.
+    The UI elements which determine what data gets displayed are initialized with the object because the plots that come next would not have the necessary filtering otherwise.
+    Think of plots as distributed on levels, level 1 would be the map, so it gets called first in the actual script with app.display_map(),
+    graph is on level 2 so it gets called next with app.display_graph() and so on. -Matteo'''
     def __init__(self):
         self.STORAGE_OPTIONS = {'User-Agent': 'Our World In Data data fetch/1.0'}
         self.df_world = gpd.read_file("https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip")
