@@ -7,31 +7,41 @@ from streamlit_folium import st_folium
 
 BASE_DIR = Path(__file__).resolve().parent
 
+def download_datasets(storage_options):
+    urls = {
+        "Annual Change In Forest Area": "https://ourworldindata.org/grapher/annual-change-forest-area.csv?v=1&csvType=full&useColumnShortNames=true",
+        "Annual Deforestation": "https://ourworldindata.org/grapher/annual-deforestation.csv?v=1&csvType=full&useColumnShortNames=true",
+        "Share Of Protected Land": "https://ourworldindata.org/grapher/terrestrial-protected-areas.csv?v=1&csvType=full&useColumnShortNames=true",
+        "Share Of Degraded Land": "https://ourworldindata.org/grapher/share-degraded-land.csv?v=1&csvType=full&useColumnShortNames=true"
+    }
+    datasets = {}
+    for name, url in urls.items():
+        df = pd.read_csv(url, storage_options=storage_options)
+        datasets[name] = df
+
+    downloads_path = BASE_DIR / "downloads"
+    downloads_path.mkdir(exist_ok=True)  #makes folder if it's not already there
+
+    for name, df in datasets.items():
+        file_path = downloads_path / f"{name}.csv"
+        if not file_path.exists():  #only save/download once
+            df.to_csv(file_path, index=False)
+
+    return datasets
+
+def clean_and_merge(df_world, datasets):
+    merged = {}
+    for name, df in datasets.items():
+        df_clean = df[(~df.code.isnull()) & (df.code != 'OWID_WRL')]
+        df_clean.rename(columns={df_clean.columns[-1]: name}, inplace=True)
+        merged[name] = pd.merge(df_world, df_clean, left_on='ISO_A3', right_on='code', how='right')
+    return merged
+
 class OwidData:
     def __init__(self):
         self.STORAGE_OPTIONS = {'User-Agent': 'Our World In Data data fetch/1.0'}
-
         self.df_world = gpd.read_file("https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip")
-        self.datasets = {
-            "Annual Change In Forest Area":  self.clean_merge_drop_nulls(data=pd.read_csv("https://ourworldindata.org/grapher/annual-change-forest-area.csv?v=1&csvType=full&useColumnShortNames=true", storage_options = self.STORAGE_OPTIONS), varname='Annual Change In Forest Area'),
-            "Annual Deforestation": self.clean_merge_drop_nulls(data=pd.read_csv("https://ourworldindata.org/grapher/annual-deforestation.csv?v=1&csvType=full&useColumnShortNames=true", storage_options = self.STORAGE_OPTIONS), varname='Annual Deforestation'),
-            "Share Of Protected Land": self.clean_merge_drop_nulls(data=pd.read_csv("https://ourworldindata.org/grapher/terrestrial-protected-areas.csv?v=1&csvType=full&useColumnShortNames=true", storage_options = self.STORAGE_OPTIONS), varname='Share Of Protected Land'),
-            "Share Of Degraded Land": self.clean_merge_drop_nulls(data=pd.read_csv("https://ourworldindata.org/grapher/share-degraded-land.csv?v=1&csvType=full&useColumnShortNames=true", storage_options = self.STORAGE_OPTIONS), varname='Share Of Degraded Land'),
-            #"fifth_dataset": "PUT_YOUR_DF_HERE"  # replace with the fifth dataset
-        }
-        self.move_to_downloads()
-
-    def move_to_downloads(self):
-        for dataset_name,dataset_file in self.datasets.items():
-            output_path = BASE_DIR / "downloads" / f"{dataset_name}.csv"
-            dataset_file.to_csv(output_path, index=False)
-        self.df_world.to_csv(BASE_DIR / "downloads" / "world.csv", index=False)
-
-    def clean_merge_drop_nulls(self, data, varname):
-        df_clean = data[(~data.code.isnull()) & (data.code != 'OWID_WRL')]
-        df_clean.rename(columns={df_clean.columns[-1]: varname}, inplace=True)
-        merged_df = pd.merge(self.df_world, df_clean, left_on='ISO_A3', right_on='code', how='right')
-        return merged_df[["geometry", "NAME", "SOVEREIGNT", "CONTINENT", "REGION_UN", "SUBREGION", "REGION_WB", "ECONOMY","INCOME_GRP", f"{varname}", "year", 'entity']].dropna()
+        self.datasets = clean_and_merge(self.df_world, download_datasets(self.STORAGE_OPTIONS))
 
 class WebApp(OwidData):
     def __init__(self):
@@ -76,7 +86,7 @@ class WebApp(OwidData):
             st.bar_chart(data_displayed)
 
         else:
-            data_displayed = self.selected_df[(self.selected_df.year == self.selected_year) & (self.selected_df.REGION_UN == self.selected_region)].groupby('entity')[
+            data_displayed = self.selected_df[(self.selected_df.year == self.selected_year) & (self.selected_df.REGION_UN == self.selected_region)].groupby('NAME')[
                 self.selected_varname].mean()
             st.bar_chart(data_displayed)
 
