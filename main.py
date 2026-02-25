@@ -7,6 +7,7 @@ from streamlit_folium import st_folium
 
 BASE_DIR = Path(__file__).resolve().parent
 
+@st.cache_data(ttl=86400)
 def download_datasets(storage_options):
     urls = {
         "Annual Change In Forest Area": "https://ourworldindata.org/grapher/annual-change-forest-area.csv?v=1&csvType=full&useColumnShortNames=true",
@@ -28,15 +29,16 @@ def download_datasets(storage_options):
             df.to_csv(file_path, index=False)
     return datasets
 
-def clean_and_merge(df_world, datasets):
+@st.cache_data(ttl=86400)
+def clean_and_merge(_df_world, datasets):
     merged = {}
     for name, df in datasets.items():
         df_clean = df[(~df.code.isnull()) & (df.code != 'OWID_WRL')].copy()
         df_clean = df_clean.rename(columns={df_clean.columns[-1]: name})
-        merged[name] = pd.merge(df_world, df_clean, left_on='ISO_A3', right_on='code', how='right')[
+        merged[name] = pd.merge(_df_world, df_clean, left_on='ISO_A3', right_on='code', how='right')[
             ["geometry", "NAME", "SOVEREIGNT", "CONTINENT", "REGION_UN",
              "SUBREGION", "REGION_WB", "ECONOMY", "INCOME_GRP", name,
-             "year", "entity"]].dropna()
+             "year", "entity"]].dropna() #add columns here if needed
     return merged
 
 class OwidData:
@@ -50,7 +52,7 @@ class WebApp(OwidData):
         super().__init__()
         self.selected_varname, self.selected_region = self.ui_setup()
         self.selected_df = self.datasets[self.selected_varname]
-        self.selected_year = st.select_slider(options= self.selected_df.year.unique(), label='Year')
+        self.selected_year = st.select_slider(options= sorted(self.selected_df.year.unique()), label='Year')
 
 
     def ui_setup(self):
@@ -59,20 +61,16 @@ class WebApp(OwidData):
         col1, col2 = st.columns([2, 2])
 
         with col1:
-            selbox_text = st.selectbox(
-                "Select dataset",
-                self.datasets.keys())
+            selbox_text = st.selectbox(label="Select dataset", options=self.datasets.keys())
         regions = list(self.datasets[selbox_text].REGION_UN.unique())
         regions.append('World')
         with col2:
-            region = st.selectbox(
-                "Region",
-                options=regions)
+            region = st.selectbox(label="Region", options=regions)
 
         return selbox_text, region
 
     def display_map(self):
-
+        #basically a placeholder for now
         st.text('Map map this is an empty placeholder map look at this map')
         m = folium.Map(
             location=[20, 0],
