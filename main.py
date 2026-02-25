@@ -26,15 +26,17 @@ def download_datasets(storage_options):
         file_path = downloads_path / f"{name}.csv"
         if not file_path.exists():  #only save/download once
             df.to_csv(file_path, index=False)
-
     return datasets
 
 def clean_and_merge(df_world, datasets):
     merged = {}
     for name, df in datasets.items():
-        df_clean = df[(~df.code.isnull()) & (df.code != 'OWID_WRL')]
-        df_clean.rename(columns={df_clean.columns[-1]: name}, inplace=True)
-        merged[name] = pd.merge(df_world, df_clean, left_on='ISO_A3', right_on='code', how='right')
+        df_clean = df[(~df.code.isnull()) & (df.code != 'OWID_WRL')].copy()
+        df_clean = df_clean.rename(columns={df_clean.columns[-1]: name})
+        merged[name] = pd.merge(df_world, df_clean, left_on='ISO_A3', right_on='code', how='right')[
+            ["geometry", "NAME", "SOVEREIGNT", "CONTINENT", "REGION_UN",
+             "SUBREGION", "REGION_WB", "ECONOMY", "INCOME_GRP", name,
+             "year", "entity"]].dropna()
     return merged
 
 class OwidData:
