@@ -74,8 +74,7 @@ class WebApp(OwidData):
 
         return selbox_text, region
 
-    def display_map(self):
-        #basically a placeholder for now
+    def display_map(self): #basically a placeholder for now
         st.text('Map map this is an empty placeholder map look at this map')
         m = folium.Map(
             location=[20, 0],
