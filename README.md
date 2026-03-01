@@ -1,10 +1,10 @@
 # Project Okavango — Group B
 
-A lightweight Python application for visualising global environmental indicators on an interactive world map. Built as part of the **Advanced Programming** course hackathon at Nova SBE.
+A lightweight Python application for visualising global environmental indicators on an interactive world map. Built as part of the **Advanced Programming** course at Nova SBE.
 
 The tool automatically fetches the **most recent** environmental datasets from [Our World in Data](https://ourworldindata.org/), merges them with country geometries using GeoPandas, and presents the results through an interactive Streamlit dashboard powered by Plotly.
 
-**Live demo:** [groupb-qtqrrbbvcdclxdhjzqcrtg.streamlit.app](https://groupb-qtqrrbbvcdclxdhjzqcrtg.streamlit.app/)
+**Live Application:** [groupb-qtqrrbbvcdclxdhjzqcrtg.streamlit.app](https://groupb-qtqrrbbvcdclxdhjzqcrtg.streamlit.app/)
 
 ## Team
 
