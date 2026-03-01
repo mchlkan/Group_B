@@ -1,3 +1,6 @@
+# pycharm and jetbrains
+.idea/
+
 # Ignore macOS system files
 .DS_Store
 
