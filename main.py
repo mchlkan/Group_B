@@ -104,7 +104,7 @@ def main() -> None:
         on_select="rerun",
         selection_mode="points",
         key=f"map_{selected_key}_{selected_year}",
-        use_container_width=True,
+        width="stretch",
     )
 
     # Handle map click → select country
@@ -179,7 +179,7 @@ def main() -> None:
             on_select="rerun",
             selection_mode="points",
             key=f"bar_{selected_key}_{selected_year}",
-            use_container_width=True,
+            width="stretch",
         )
 
         # Handle bar click → select country
@@ -245,7 +245,7 @@ def main() -> None:
                     height=320,
                     margin=dict(l=0, r=0, t=45, b=0),
                 )
-                st.plotly_chart(trend_fig, use_container_width=True)
+                st.plotly_chart(trend_fig, width="stretch")
 
 
 if __name__ == "__main__":
