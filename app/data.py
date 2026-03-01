@@ -7,12 +7,13 @@ country geometries.
 """
 
 from __future__ import annotations
+
+import urllib.request
 from pathlib import Path
 from typing import Dict, Mapping, Set
+
 import geopandas as gpd
 import pandas as pd
-import urllib.request
-
 
 # Defining the OwidData class
 
@@ -40,6 +41,7 @@ class OwidData:
         Preprocessed OWID datasets keyed by name.
     merged : Dict[str, gpd.GeoDataFrame]
         Datasets merged with world geometries, keyed by name.
+
     """
 
     # Defining class constants
@@ -107,6 +109,7 @@ class OwidData:
             Path to the directory used for storing downloaded files.
             Created automatically if it does not exist.
             Defaults to ``"downloads"``.
+
         """
         self.download_dir: Path = Path(download_dir)
         self.download_dir.mkdir(exist_ok=True)
@@ -136,6 +139,7 @@ class OwidData:
         -------
         Dict[str, pd.DataFrame]
             Dictionary mapping dataset names to raw DataFrames.
+
         """
         headers: Dict[str, str] = {"User-Agent": "Mozilla/5.0"}
         datasets: Dict[str, pd.DataFrame] = {}
@@ -164,6 +168,7 @@ class OwidData:
         -------
         gpd.GeoDataFrame
             Country-level geometries with ISO codes and metadata.
+
         """
         map_path: Path = self.download_dir / "ne_110m_admin_0_countries.zip"
 
@@ -223,6 +228,7 @@ class OwidData:
         ValueError
             If required columns are missing or metric column detection
             is ambiguous.
+
         """
         cleaned: Dict[str, pd.DataFrame] = {}
 
@@ -231,14 +237,14 @@ class OwidData:
             if not isinstance(df, pd.DataFrame):
                 raise TypeError(
                     f"Dataset '{name}' must be a pandas DataFrame, "
-                    f"got {type(df)!r}."
+                    f"got {type(df)!r}.",
                 )
 
             missing = self.META_COLS - set(df.columns)
             if missing:
                 raise ValueError(
                     f"Dataset '{name}' is missing required columns: "
-                    f"{sorted(missing)}."
+                    f"{sorted(missing)}.",
                 )
 
             out = df.copy(deep=True)
@@ -253,7 +259,7 @@ class OwidData:
                 raise ValueError(
                     f"Dataset '{name}': expected exactly 1 metric "
                     f"column besides {sorted(self.META_COLS)}, found "
-                    f"{len(metric_candidates)}: {metric_candidates}."
+                    f"{len(metric_candidates)}: {metric_candidates}.",
                 )
 
             metric_col: str = metric_candidates[0]
@@ -319,6 +325,7 @@ class OwidData:
         -------
         Dict[str, gpd.GeoDataFrame]
             Dictionary mapping dataset names to merged GeoDataFrames.
+
         """
         merged: Dict[str, gpd.GeoDataFrame] = {}
 
@@ -363,6 +370,7 @@ class OwidData:
             If *key* is not a valid dataset name.
         ValueError
             If detection fails (zero or multiple candidates).
+
         """
         df: pd.DataFrame = self.datasets[key]
         candidates = [
@@ -371,7 +379,7 @@ class OwidData:
         if len(candidates) != 1:
             raise ValueError(
                 f"Expected 1 metric column in '{key}', "
-                f"found {len(candidates)}: {candidates}."
+                f"found {len(candidates)}: {candidates}.",
             )
         return candidates[0]
 
@@ -391,6 +399,7 @@ class OwidData:
         -------
         list[int]
             Sorted list of available years.
+
         """
         gdf: gpd.GeoDataFrame = self.merged[key]
         val_col: str = self.value_column(key)
@@ -417,6 +426,7 @@ class OwidData:
         -------
         gpd.GeoDataFrame
             Filtered GeoDataFrame suitable for ``px.choropleth``.
+
         """
         gdf: gpd.GeoDataFrame = self.merged[key]
         val_col: str = self.value_column(key)
@@ -445,6 +455,7 @@ class OwidData:
             DataFrame with columns ``entity``, ``code``, the metric
             column, ``REGION_UN``, and a ``group`` label
             (``"Top {n}"`` / ``"Bottom {n}"``).
+
         """
         cdf: gpd.GeoDataFrame = self.country_data(key, year)
         val_col: str = self.value_column(key)
@@ -482,6 +493,7 @@ class OwidData:
         -------
         pd.DataFrame
             Rows for the requested country sorted by year.
+
         """
         df: pd.DataFrame = self.datasets[key]
         mask = (df["is_mappable"]) & (df["code"] == iso_code)
@@ -493,7 +505,7 @@ class OwidData:
         key: str,
         iso_code: str,
         year: int,
-    ) -> Dict[str, object] | None:
+    ) -> dict[str, object] | None:
         """Return summary details for one country in a given year.
 
         Parameters
@@ -511,6 +523,7 @@ class OwidData:
             Dictionary with keys ``entity``, ``region``, ``value``,
             ``rank``, and ``delta`` (change vs. previous year).
             Returns ``None`` when no data is found.
+
         """
         val_col: str = self.value_column(key)
         cdf: gpd.GeoDataFrame = self.country_data(key, year)
@@ -527,7 +540,7 @@ class OwidData:
         # Rank (1 = highest value)
         ranked = cdf[val_col].rank(ascending=False, method="min")
         rank: int = int(
-            ranked[cdf["code"] == iso_code].iloc[0]
+            ranked[cdf["code"] == iso_code].iloc[0],
         )
 
         # Delta vs previous year
