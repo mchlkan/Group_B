@@ -145,6 +145,11 @@ def _render_bar_chart(data: OwidData, ctx: ViewContext) -> None:
         color="group",
         custom_data=["code"],
         title=f"Top and bottom 5 countries — {ctx.label}",
+        labels={
+            "entity": "Country",
+            ctx.val_col: ctx.label,
+            "group": "Group",
+        },
         color_discrete_map={
             "Top 5": "#4ade80",
             "Bottom 5": "#f87171",
@@ -203,12 +208,17 @@ def _render_details_and_trend(
             else:
                 st.metric("Country", details["entity"])
                 st.metric("Region", details["region"])
-                st.metric("Value", f"{details['value']:.2f}")
+                st.metric(ctx.label, f"{details['value']:.2f}")
                 st.metric("Rank", f"#{details['rank']}")
                 delta = details["delta"]
                 st.metric(
-                    "Change vs. previous year",
-                    "N/A" if delta is None else f"{delta:+.2f}",
+                    "Change vs. prev. year",
+                    f"{details['value']:.2f}",
+                    delta=(
+                        "N/A"
+                        if delta is None
+                        else f"{delta:+.2f}"
+                    ),
                 )
 
     with trend_col:
@@ -219,6 +229,7 @@ def _render_details_and_trend(
             trend = data.country_timeseries(
                 ctx.selected_key, selected_code,
             )
+            trend = trend[trend["year"] <= ctx.selected_year]
             if trend.empty:
                 st.warning("No time-series data for this country.")
             else:
@@ -228,6 +239,10 @@ def _render_details_and_trend(
                     y=ctx.val_col,
                     markers=True,
                     title=f"{trend['entity'].iloc[0]} · {ctx.label}",
+                    labels={
+                        "year": "Year",
+                        ctx.val_col: ctx.label,
+                    },
                 )
                 trend_fig.update_layout(
                     height=320,
@@ -305,6 +320,11 @@ def main() -> None:
         locationmode="ISO-3",
         color_continuous_scale="Tealgrn",
         title="Click a country to inspect details",
+        labels={
+            val_col: label,
+            "code": "ISO Code",
+            "REGION_UN": "Region",
+        },
     )
     map_fig.update_layout(
         height=520,

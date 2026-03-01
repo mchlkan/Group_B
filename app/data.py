@@ -543,12 +543,13 @@ class OwidData:
             ranked[cdf["code"] == iso_code].iloc[0],
         )
 
-        # Delta vs previous year
+        # Delta vs nearest previous year
         ts = self.country_timeseries(key, iso_code)
-        prev = ts[ts["year"] == year - 1]
+        prev_years = ts[ts["year"] < year]
         delta: float | None = None
-        if not prev.empty:
-            delta = value - float(prev.iloc[0][val_col])
+        if not prev_years.empty:
+            nearest = prev_years.loc[prev_years["year"].idxmax()]
+            delta = value - float(nearest[val_col])
 
         return {
             "entity": entity,
