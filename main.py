@@ -30,6 +30,7 @@ class ViewContext(NamedTuple):
     label: str
     sel_key: str
 
+
 # ------------------------------------------------------------------ #
 #  Data loading (cached so it only runs once per session)             #
 # ------------------------------------------------------------------ #
@@ -131,7 +132,8 @@ def _render_bar_chart(data: OwidData, ctx: ViewContext) -> None:
     """
     st.subheader("Global Trend")
     chart_data = data.top_bottom_countries(
-        ctx.selected_key, ctx.selected_year,
+        ctx.selected_key,
+        ctx.selected_year,
     )
 
     if chart_data.empty:
@@ -177,7 +179,8 @@ def _render_bar_chart(data: OwidData, ctx: ViewContext) -> None:
 
 
 def _render_details_and_trend(
-    data: OwidData, ctx: ViewContext,
+    data: OwidData,
+    ctx: ViewContext,
 ) -> None:
     """Display the country-detail panel and trend line chart.
 
@@ -198,12 +201,13 @@ def _render_details_and_trend(
             st.info("Click a country on the map or bar chart.")
         else:
             details = data.country_details(
-                ctx.selected_key, selected_code, ctx.selected_year,
+                ctx.selected_key,
+                selected_code,
+                ctx.selected_year,
             )
             if details is None:
                 st.warning(
-                    "No data for this country in the selected "
-                    "dataset / year.",
+                    "No data for this country in the selected " "dataset / year.",
                 )
             else:
                 st.metric("Country", details["entity"])
@@ -214,11 +218,7 @@ def _render_details_and_trend(
                 st.metric(
                     "Change vs. prev. year",
                     f"{details['value']:.2f}",
-                    delta=(
-                        "N/A"
-                        if delta is None
-                        else f"{delta:+.2f}"
-                    ),
+                    delta=("N/A" if delta is None else f"{delta:+.2f}"),
                 )
 
     with trend_col:
@@ -227,7 +227,8 @@ def _render_details_and_trend(
             st.info("Trend appears after selecting a country.")
         else:
             trend = data.country_timeseries(
-                ctx.selected_key, selected_code,
+                ctx.selected_key,
+                selected_code,
             )
             trend = trend[trend["year"] <= ctx.selected_year]
             if trend.empty:
