@@ -17,6 +17,7 @@ import pandas as pd
 
 # Defining the OwidData class
 
+
 class OwidData:
     """Download, preprocess, and merge OWID environmental datasets.
 
@@ -91,10 +92,14 @@ class OwidData:
     """URL for the Natural Earth 110 m country shapefile."""
 
     META_COLS: Set[str] = {"entity", "code", "year"}
-    """Column names present in every OWID dataset that are not value columns."""
+    """Column names in every OWID dataset that are not value columns."""
 
     KNOWN_NON_METRIC: Set[str] = {
-        "entity", "code", "year", "is_aggregate", "is_mappable",
+        "entity",
+        "code",
+        "year",
+        "is_aggregate",
+        "is_mappable",
     }
     """Columns to exclude when auto-detecting the single metric column."""
 
@@ -118,9 +123,7 @@ class OwidData:
         raw_datasets: Dict[str, pd.DataFrame] = self.download_datasets()
 
         # Preprocessing the datasets before merging
-        self.datasets: Dict[str, pd.DataFrame] = (
-            self.preprocess_datasets(raw_datasets)
-        )
+        self.datasets: Dict[str, pd.DataFrame] = self.preprocess_datasets(raw_datasets)
 
         # Loading the Natural Earth world map
         self.world: gpd.GeoDataFrame = self._load_map()
@@ -251,8 +254,7 @@ class OwidData:
 
             # --- auto-detect the metric column ---
             metric_candidates = [
-                col for col in out.columns
-                if col not in self.KNOWN_NON_METRIC
+                col for col in out.columns if col not in self.KNOWN_NON_METRIC
             ]
 
             if len(metric_candidates) != 1:
@@ -265,25 +267,21 @@ class OwidData:
             metric_col: str = metric_candidates[0]
 
             # --- enforce dtypes ---
-            out["year"] = (
-                pd.to_numeric(out["year"], errors="coerce")
-                .astype("Int64")
-            )
-            out[metric_col] = (
-                pd.to_numeric(out[metric_col], errors="coerce")
-                .astype(float)
+            out["year"] = pd.to_numeric(out["year"], errors="coerce").astype("Int64")
+            out[metric_col] = pd.to_numeric(out[metric_col], errors="coerce").astype(
+                float
             )
 
             # --- boolean flags ---
             code_str = out["code"].astype("string")
 
-            out["is_aggregate"] = (
-                out["code"].isna()
-                | code_str.str.startswith("OWID_", na=False)
+            out["is_aggregate"] = out["code"].isna() | code_str.str.startswith(
+                "OWID_", na=False
             )
 
             iso_like = code_str.str.fullmatch(
-                r"[A-Za-z]{3}", na=False,
+                r"[A-Za-z]{3}",
+                na=False,
             )
             out["is_mappable"] = ~out["is_aggregate"] & iso_like
 
@@ -294,15 +292,11 @@ class OwidData:
             )
 
             # --- deterministic sort ---
-            out = (
-                out
-                .sort_values(
-                    by=["is_aggregate", "code", "entity", "year"],
-                    na_position="last",
-                    kind="mergesort",
-                )
-                .reset_index(drop=True)
-            )
+            out = out.sort_values(
+                by=["is_aggregate", "code", "entity", "year"],
+                na_position="last",
+                kind="mergesort",
+            ).reset_index(drop=True)
 
             cleaned[name] = out
 
@@ -373,9 +367,7 @@ class OwidData:
 
         """
         df: pd.DataFrame = self.datasets[key]
-        candidates = [
-            c for c in df.columns if c not in self.KNOWN_NON_METRIC
-        ]
+        candidates = [c for c in df.columns if c not in self.KNOWN_NON_METRIC]
         if len(candidates) != 1:
             raise ValueError(
                 f"Expected 1 metric column in '{key}', "
@@ -408,7 +400,9 @@ class OwidData:
         return [int(y) for y in years]
 
     def country_data(
-        self, key: str, year: int,
+        self,
+        key: str,
+        year: int,
     ) -> gpd.GeoDataFrame:
         """Return map-ready country data for a single year.
 
@@ -436,7 +430,10 @@ class OwidData:
         return filtered.copy()
 
     def top_bottom_countries(
-        self, key: str, year: int, n: int = 5,
+        self,
+        key: str,
+        year: int,
+        n: int = 5,
     ) -> pd.DataFrame:
         """Return the *n* highest and *n* lowest countries for a year.
 
@@ -475,7 +472,9 @@ class OwidData:
         return result
 
     def country_timeseries(
-        self, key: str, iso_code: str,
+        self,
+        key: str,
+        iso_code: str,
     ) -> pd.DataFrame:
         """Return the full time series for one country.
 

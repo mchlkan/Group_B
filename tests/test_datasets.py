@@ -24,6 +24,7 @@ def data() -> OwidData:
 
 # ── Function 1: download_datasets ──────────────────────────────────
 
+
 def test_downloads_directory_exists(data: OwidData) -> None:
     assert data.download_dir.exists(), "downloads/ directory was not created"
 
@@ -41,9 +42,7 @@ def test_map_file_downloaded(data: OwidData) -> None:
 
 def test_datasets_are_dataframes(data: OwidData) -> None:
     for name, df in data.datasets.items():
-        assert isinstance(df, pd.DataFrame), (
-            f"Dataset '{name}' is not a DataFrame"
-        )
+        assert isinstance(df, pd.DataFrame), f"Dataset '{name}' is not a DataFrame"
 
 
 def test_datasets_not_empty(data: OwidData) -> None:
@@ -53,11 +52,12 @@ def test_datasets_not_empty(data: OwidData) -> None:
 
 # ── Function 2: merge_datasets ─────────────────────────────────────
 
+
 def test_merged_are_geodataframes(data: OwidData) -> None:
     for name, gdf in data.merged.items():
-        assert isinstance(gdf, gpd.GeoDataFrame), (
-            f"Merged '{name}' is not a GeoDataFrame"
-        )
+        assert isinstance(
+            gdf, gpd.GeoDataFrame
+        ), f"Merged '{name}' is not a GeoDataFrame"
 
 
 def test_merged_not_empty(data: OwidData) -> None:
@@ -67,9 +67,9 @@ def test_merged_not_empty(data: OwidData) -> None:
 
 def test_geometry_column_present(data: OwidData) -> None:
     for name, gdf in data.merged.items():
-        assert "geometry" in gdf.columns, (
-            f"Merged '{name}' is missing a 'geometry' column"
-        )
+        assert (
+            "geometry" in gdf.columns
+        ), f"Merged '{name}' is missing a 'geometry' column"
 
 
 def test_world_is_left_side(data: OwidData) -> None:
@@ -80,5 +80,3 @@ def test_world_is_left_side(data: OwidData) -> None:
             f"Merged '{name}' has fewer rows than the world map – "
             "world should be the left DataFrame in the merge"
         )
-
-
