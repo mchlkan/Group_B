@@ -1,6 +1,15 @@
-# DS_Store / json files
+# Ignore macOS system files
 .DS_Store
+
+# Ignore Python virtual environment directories
 settings.json
+
+# Ignore VSCode settings
+.vscode/
+
+# Ignore all downloaded files but keep folder structure
+downloads/*
+!downloads/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
