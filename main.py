@@ -129,7 +129,7 @@ def _render_bar_chart(data: OwidData, ctx: ViewContext) -> None:
         Current view parameters.
 
     """
-    st.subheader("Top & bottom countries")
+    st.subheader("Global Trend")
     chart_data = data.top_bottom_countries(
         ctx.selected_key, ctx.selected_year,
     )
@@ -285,9 +285,12 @@ def main() -> None:
     label: str = OwidData.DATASET_LABELS[selected_key]
 
     # ── Session state for country selection ────────────────────────── #
-    sel_key = f"sel::{selected_key}::{selected_year}"
+    sel_key = f"sel::{selected_key}"
     if sel_key not in st.session_state:
         st.session_state[sel_key] = None
+
+    # ── KPI row ───────────────────────────────────────────────────── #
+    _render_kpis(gdf, val_col)
 
     # ── Choropleth world map ──────────────────────────────────────── #
     st.subheader(f"{label} ({selected_year})")
@@ -320,9 +323,6 @@ def main() -> None:
     if clicked:
         st.session_state[sel_key] = clicked
 
-    # ── KPI row ───────────────────────────────────────────────────── #
-    _render_kpis(gdf, val_col)
-
     ctx = ViewContext(
         selected_key=selected_key,
         selected_year=selected_year,
@@ -331,11 +331,11 @@ def main() -> None:
         sel_key=sel_key,
     )
 
-    # ── Comparative bar chart (top 5 / bottom 5) ─────────────────── #
-    _render_bar_chart(data, ctx)
-
     # ── Country detail panel + trend line ─────────────────────────── #
     _render_details_and_trend(data, ctx)
+
+    # ── Global trend (top 5 / bottom 5) ──────────────────────────── #
+    _render_bar_chart(data, ctx)
 
 
 if __name__ == "__main__":
