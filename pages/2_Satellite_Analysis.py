@@ -55,9 +55,9 @@ def page() -> None:
 
     # Initialise session state for coordinates
     if "sat_lat" not in st.session_state:
-        st.session_state["sat_lat"] = 0.0
+        st.session_state["sat_lat"] = 38.6780
     if "sat_lon" not in st.session_state:
-        st.session_state["sat_lon"] = 0.0
+        st.session_state["sat_lon"] = -9.3222
 
     # ── Sidebar inputs ────────────────────────────────────────────── #
     with st.sidebar:
@@ -96,8 +96,13 @@ def page() -> None:
     st.caption("Click on the map to set coordinates, or enter them in the sidebar.")
 
     m = folium.Map(location=[latitude, longitude], zoom_start=zoom)
-    folium.Marker(
+    folium.CircleMarker(
         [latitude, longitude],
+        radius=8,
+        color="#e74c3c",
+        fill=True,
+        fill_color="#e74c3c",
+        fill_opacity=0.9,
         tooltip=f"{latitude:.4f}, {longitude:.4f}",
     ).add_to(m)
 
@@ -107,9 +112,11 @@ def page() -> None:
     if map_data and map_data.get("last_clicked"):
         clicked_lat = map_data["last_clicked"]["lat"]
         clicked_lon = map_data["last_clicked"]["lng"]
-        if clicked_lat != st.session_state["sat_lat"] or clicked_lon != st.session_state["sat_lon"]:
-            st.session_state["sat_lat"] = round(clicked_lat, 4)
-            st.session_state["sat_lon"] = round(clicked_lon, 4)
+        clamped_lat = max(-90.0, min(90.0, round(clicked_lat, 4)))
+        clamped_lon = max(-180.0, min(180.0, round(clicked_lon, 4)))
+        if clamped_lat != st.session_state["sat_lat"] or clamped_lon != st.session_state["sat_lon"]:
+            st.session_state["sat_lat"] = clamped_lat
+            st.session_state["sat_lon"] = clamped_lon
             st.rerun()
 
     st.divider()
