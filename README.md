@@ -38,12 +38,17 @@ All data is downloaded automatically at runtime — nothing is hardcoded.
 Group_B/
 ├── app/
 │   ├── __init__.py
-│   └── data.py            # OwidData class (data pipeline)
-├── downloads/              # Auto-generated folder for fetched datasets
+│   ├── data.py            # OwidData class — data download, preprocessing, merging
+│   └── ai_pipeline.py     # AI/satellite pipeline stubs (fetch, analyze, store)
+├── pages/
+│   ├── 1_Data_Explorer.py # Page 1 — interactive choropleth map and trend charts
+│   └── 2_Satellite_Analysis.py  # Page 2 — satellite imagery + AI analysis UI
+├── downloads/              # Auto-generated folder for fetched datasets & shapefiles
 ├── notebooks/              # Prototyping and exploration notebooks
 ├── tests/                  # Unit tests (pytest)
-├── main.py                 # Streamlit application entry point
+├── main.py                 # Streamlit multi-page navigation entry point
 ├── requirements.txt        # pip dependencies
+├── setup.cfg               # Linter configuration (flake8)
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -87,13 +92,43 @@ pytest
 
 ## How It Works
 
-1. **`OwidData` class** (`app/data.py`) — downloads the five OWID CSV datasets and the Natural Earth shapefile into `downloads/`, preprocesses each dataset (validates columns, detects the metric column, adds `is_aggregate` / `is_mappable` flags), and merges them with country geometries.
-2. **`main.py`** — imports `OwidData`, caches it with `@st.cache_resource`, and builds the Streamlit dashboard:
-   - **Sidebar controls**: dataset selector, year slider, region filter.
-   - **Key indicators**: countries with data, global mean, highest, lowest.
-   - **Choropleth map**: interactive Plotly map; click a country to inspect it.
-   - **Selection details & trend**: country metrics and a time-series line chart scoped to the selected year.
-   - **Global trend**: top-5 / bottom-5 bar chart; click a bar to select that country.
+### Data layer — `app/data.py`
+
+The `OwidData` class drives the entire data pipeline:
+
+1. Downloads the five OWID CSV datasets and the Natural Earth 110 m shapefile into `downloads/` (skipped if already present).
+2. Preprocesses each dataset — validates columns, auto-detects the metric column, and adds `is_aggregate` / `is_mappable` boolean flags.
+3. Merges all datasets with country geometries via GeoPandas to produce a single `GeoDataFrame` per dataset ready for mapping.
+
+### AI pipeline — `app/ai_pipeline.py`
+
+Defines the backend interface for the Satellite Analysis page:
+
+| Function | Purpose |
+|---|---|
+| `fetch_satellite_image(lat, lon, zoom)` | Download a satellite tile and return its local path |
+| `analyze_image(image_path)` | Send the image to an AI/LLM and return a description + danger level (1–5) |
+| `save_analysis(...)` | Persist an analysis result to a database |
+| `load_previous_analysis(lat, lon)` | Retrieve a stored analysis for a given coordinate |
+
+> All functions are currently **stubs** — they return placeholder data so the UI renders. Teammates implement the bodies (Ollama calls, tile servers, database writes, etc.).
+
+### Application — `main.py` + `pages/`
+
+`main.py` is the Streamlit multi-page navigation hub. It registers two pages and delegates rendering to each:
+
+**Page 1 — Data Explorer** (`pages/1_Data_Explorer.py`)
+- `load_data()` — loads and caches the `OwidData` instance.
+- `_render_kpis()` — displays key indicators (countries with data, global mean, highest, lowest).
+- `_render_bar_chart()` — top-5 / bottom-5 countries bar chart; click a bar to select a country.
+- `_render_details_and_trend()` — per-country metric cards and a time-series line chart.
+- `page()` — assembles the full layout: sidebar controls (dataset, year, region), choropleth map, and the panels above.
+
+**Page 2 — Satellite Analysis** (`pages/2_Satellite_Analysis.py`)
+- `page()` — coordinate input form, triggers `fetch_satellite_image` and `analyze_image`.
+- `_danger_badge()` — renders a colour-coded HTML badge for the AI danger level.
+- `_render_placeholder()` — shown while awaiting a real satellite image.
+- `_render_result()` — displays the AI description, danger score, and any stored history.
 
 ---
 
