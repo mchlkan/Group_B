@@ -8,7 +8,9 @@ teammates will implement.
 
 from __future__ import annotations
 
+import folium
 import streamlit as st
+from streamlit_folium import st_folium
 
 from app.ai_pipeline import (
     analyze_image,
@@ -51,6 +53,12 @@ def page() -> None:
     st.title("Satellite Analysis")
     st.caption("Analyse satellite imagery with AI-powered risk assessment")
 
+    # Initialise session state for coordinates
+    if "sat_lat" not in st.session_state:
+        st.session_state["sat_lat"] = 0.0
+    if "sat_lon" not in st.session_state:
+        st.session_state["sat_lon"] = 0.0
+
     # ── Sidebar inputs ────────────────────────────────────────────── #
     with st.sidebar:
         st.header("Coordinates")
@@ -59,23 +67,54 @@ def page() -> None:
             "Latitude",
             min_value=-90.0,
             max_value=90.0,
-            value=0.0,
+            value=st.session_state["sat_lat"],
             step=0.01,
             format="%.4f",
+            help="Range: -90 (South Pole) to 90 (North Pole)",
         )
         longitude = st.number_input(
             "Longitude",
             min_value=-180.0,
             max_value=180.0,
-            value=0.0,
+            value=st.session_state["sat_lon"],
             step=0.01,
             format="%.4f",
+            help="Range: -180 (West) to 180 (East)",
         )
-        zoom = st.slider("Zoom level", min_value=1, max_value=18, value=10)
+        zoom = st.slider(
+            "Zoom level",
+            min_value=1,
+            max_value=18,
+            value=10,
+            help="1 = whole world, 18 = street level. Standard range for web map tile servers (OSM, Google, Mapbox).",
+        )
 
         analyze_btn = st.button("Analyze", type="primary", use_container_width=True)
 
-    # ── Main area ─────────────────────────────────────────────────── #
+    # ── Clickable map for coordinate selection ────────────────────── #
+    st.subheader("Select location")
+    st.caption("Click on the map to set coordinates, or enter them in the sidebar.")
+
+    m = folium.Map(location=[latitude, longitude], zoom_start=zoom)
+    folium.Marker(
+        [latitude, longitude],
+        tooltip=f"{latitude:.4f}, {longitude:.4f}",
+    ).add_to(m)
+
+    map_data = st_folium(m, height=400, width=None, key="coord_map")
+
+    # Update coordinates when the user clicks the map
+    if map_data and map_data.get("last_clicked"):
+        clicked_lat = map_data["last_clicked"]["lat"]
+        clicked_lon = map_data["last_clicked"]["lng"]
+        if clicked_lat != st.session_state["sat_lat"] or clicked_lon != st.session_state["sat_lon"]:
+            st.session_state["sat_lat"] = round(clicked_lat, 4)
+            st.session_state["sat_lon"] = round(clicked_lon, 4)
+            st.rerun()
+
+    st.divider()
+
+    # ── Analysis area ─────────────────────────────────────────────── #
 
     if analyze_btn:
         with st.spinner("Fetching satellite image..."):
@@ -86,17 +125,14 @@ def page() -> None:
                 "Could not fetch satellite image. "
                 "The image download backend is not yet connected."
             )
-            # Show placeholder layout even without a real image
             _render_placeholder(latitude, longitude, zoom)
             return
 
         with st.spinner("Running AI analysis..."):
             analysis = analyze_image(image_path)
 
-        # Persist result (best-effort; stub returns False)
         save_analysis(latitude, longitude, zoom, image_path, analysis)
 
-        # Store in session so it survives reruns
         st.session_state["sat_result"] = {
             "image_path": image_path,
             "analysis": analysis,
@@ -105,12 +141,11 @@ def page() -> None:
             "zoom": zoom,
         }
 
-    # Render stored result if available
     result = st.session_state.get("sat_result")
     if result:
         _render_result(result)
     elif not analyze_btn:
-        st.info("Enter coordinates in the sidebar and press **Analyze** to begin.")
+        st.info("Enter coordinates in the sidebar (or click the map) and press **Analyze** to begin.")
 
 
 def _render_placeholder(lat: float, lon: float, zoom: int) -> None:
