@@ -55,9 +55,9 @@ def page() -> None:
 
     # Initialise session state for coordinates
     if "sat_lat" not in st.session_state:
-        st.session_state["sat_lat"] = 0.0
+        st.session_state["sat_lat"] = 38.6780
     if "sat_lon" not in st.session_state:
-        st.session_state["sat_lon"] = 0.0
+        st.session_state["sat_lon"] = -9.3222
 
     # ── Sidebar inputs ────────────────────────────────────────────── #
     with st.sidebar:
@@ -96,8 +96,13 @@ def page() -> None:
     st.caption("Click on the map to set coordinates, or enter them in the sidebar.")
 
     m = folium.Map(location=[latitude, longitude], zoom_start=zoom)
-    folium.Marker(
+    folium.CircleMarker(
         [latitude, longitude],
+        radius=8,
+        color="#e74c3c",
+        fill=True,
+        fill_color="#e74c3c",
+        fill_opacity=0.9,
         tooltip=f"{latitude:.4f}, {longitude:.4f}",
     ).add_to(m)
 
