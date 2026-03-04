@@ -112,9 +112,11 @@ def page() -> None:
     if map_data and map_data.get("last_clicked"):
         clicked_lat = map_data["last_clicked"]["lat"]
         clicked_lon = map_data["last_clicked"]["lng"]
-        if clicked_lat != st.session_state["sat_lat"] or clicked_lon != st.session_state["sat_lon"]:
-            st.session_state["sat_lat"] = round(clicked_lat, 4)
-            st.session_state["sat_lon"] = round(clicked_lon, 4)
+        clamped_lat = max(-90.0, min(90.0, round(clicked_lat, 4)))
+        clamped_lon = max(-180.0, min(180.0, round(clicked_lon, 4)))
+        if clamped_lat != st.session_state["sat_lat"] or clamped_lon != st.session_state["sat_lon"]:
+            st.session_state["sat_lat"] = clamped_lat
+            st.session_state["sat_lon"] = clamped_lon
             st.rerun()
 
     st.divider()
