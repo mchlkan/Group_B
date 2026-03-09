@@ -9,6 +9,7 @@ can render.  Teammates will replace the bodies with real implementations
 from __future__ import annotations
 
 import base64
+import io
 import json
 import math
 import urllib.parse
@@ -16,6 +17,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
 import yaml
 
 ESRI_EXPORT_URL = (
@@ -62,7 +64,7 @@ DEFAULT_IMAGE_PROMPT = (
 DEFAULT_IMAGE_OPTIONS: dict[str, Any] = {
     "temperature": 0.2,
     "top_p": 0.9,
-    "num_predict": 180,
+    "num_predict": 80,
 }
 """Default Ollama generation options for image description."""
 
@@ -246,6 +248,21 @@ def _image_description_config() -> tuple[str, str, dict[str, Any]]:
     return model, prompt, options
 
 
+def _encode_image_for_ollama(image_file: Path, max_size: int = 448) -> str:
+    """Return a base64 JPEG string optimized for faster multimodal inference.
+
+    The image is converted to RGB and downscaled (while preserving aspect ratio)
+    to reduce vision token cost and request size.
+    """
+    with Image.open(image_file) as img:
+        rgb_img = img.convert("RGB")
+        rgb_img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+        buffer = io.BytesIO()
+        rgb_img.save(buffer, format="JPEG", quality=85, optimize=True)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
 def _ollama_has_model(model_name: str) -> bool:
     """Return ``True`` if Ollama already has *model_name* available locally."""
     tags = _ollama_request("/api/tags")
@@ -382,7 +399,7 @@ def analyze_image(image_path: str) -> dict:
             "danger_label": "Unknown",
         }
 
-    image_b64 = base64.b64encode(image_file.read_bytes()).decode("utf-8")
+    image_b64 = _encode_image_for_ollama(image_file)
     payload = {
         "model": model_name,
         "prompt": prompt,
