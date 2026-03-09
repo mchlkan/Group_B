@@ -1,0 +1,21 @@
+image_description:
+  model: qwen3.5:4b
+  prompt: >
+    Describe this satellite image in 4-6 concise sentences.
+    Focus on land cover, visible human activity, vegetation, water,
+    and any obvious signs of deforestation, drought, fire scars,
+    flooding, erosion, or pollution.
+  options:
+    temperature: 0.2
+    top_p: 0.9
+    num_predict: 180
+
+risk_classification:
+  model: qwen2.5:1.5b
+  prompt: >
+    Based on the image description, classify environmental risk as
+    Very Low, Low, Moderate, High, or Critical. Explain briefly.
+  options:
+    temperature: 0.1
+    top_p: 0.9
+    num_predict: 120

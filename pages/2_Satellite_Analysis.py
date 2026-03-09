@@ -135,6 +135,11 @@ def page() -> None:
             _render_placeholder(latitude, longitude, zoom)
             return
 
+        st.subheader("Satellite Image")
+        st.image(image_path, use_container_width=True)
+        st.caption(f"({latitude:.4f}, {longitude:.4f}) · zoom {zoom}")
+        st.info("Running AI analysis on this image...")
+
         with st.spinner("Running AI analysis..."):
             analysis = analyze_image(image_path)
 
