@@ -25,6 +25,12 @@ ESRI_TILE_URL = (
 )
 """ArcGIS REST endpoint used to fetch XYZ image tiles."""
 
+ESRI_TILE_URL_ALT = (
+    "https://server.arcgisonline.com/ArcGIS/rest/services/"
+    "World_Imagery/MapServer/tile"
+)
+"""Alternate ArcGIS tile host used as a network fallback."""
+
 IMAGE_DIR = Path("images")
 """Directory where downloaded satellite images are stored."""
 
@@ -104,22 +110,37 @@ def _image_filename(latitude: float, longitude: float, zoom: int) -> Path:
     return IMAGE_DIR / filename
 
 
-def _download_to_path(url: str, output_path: Path, timeout: int = 20) -> bool:
-    """Download binary content from *url* and store it at *output_path*."""
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            image_bytes = response.read()
-        if not image_bytes:
-            return False
-        output_path.write_bytes(image_bytes)
-    except Exception:
-        return False
+def _download_to_path(
+    url: str,
+    output_path: Path,
+    timeout: int = 35,
+    attempts: int = 2,
+) -> bool:
+    """Download binary content from *url* and store it at *output_path*.
 
-    return output_path.exists() and output_path.stat().st_size > 0
+    Retries a small number of times to handle transient network errors in
+    hosted environments.
+    """
+    for attempt in range(1, attempts + 1):
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                image_bytes = response.read()
+            if not image_bytes:
+                raise ValueError("Empty response body.")
+            output_path.write_bytes(image_bytes)
+            return output_path.exists() and output_path.stat().st_size > 0
+        except Exception as exc:
+            # Visible in Streamlit Cloud logs for fetch diagnostics.
+            print(
+                f"[fetch_satellite_image] attempt={attempt}/{attempts} "
+                f"failed url={url} error={type(exc).__name__}: {exc}",
+            )
+
+    return False
 
 
 def fetch_satellite_image(
@@ -174,6 +195,10 @@ def fetch_satellite_image(
     x_tile, y_tile = _tile_xy_from_latlon(latitude, longitude, zoom)
     tile_url = f"{ESRI_TILE_URL}/{zoom}/{y_tile}/{x_tile}"
     if _download_to_path(tile_url, output_path):
+        return str(output_path)
+
+    alt_tile_url = f"{ESRI_TILE_URL_ALT}/{zoom}/{y_tile}/{x_tile}"
+    if _download_to_path(alt_tile_url, output_path):
         return str(output_path)
 
     return None
