@@ -14,6 +14,10 @@ settings.json
 downloads/*
 !downloads/.gitkeep
 
+# Ignore generated satellite images but keep folder structure
+images/*
+!images/.gitkeep
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
