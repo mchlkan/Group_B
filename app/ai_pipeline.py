@@ -388,17 +388,21 @@ def analyze_image(image_path: str) -> dict:
         "prompt": prompt,
         "images": [image_b64],
         "options": options,
+        "think": False,
         "stream": False,
     }
 
     result = _ollama_request(
         "/api/generate",
         payload=payload,
-        timeout=180,
+        timeout=300,
     )
     if result is None:
         return {
-            "description": "Ollama did not return a valid response.",
+            "description": (
+                "Ollama did not return a response in time. "
+                "Try reducing num_predict in models.yaml or use a smaller model."
+            ),
             "danger_level": 0,
             "danger_label": "Unknown",
         }
