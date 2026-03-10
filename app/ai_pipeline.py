@@ -12,6 +12,7 @@ import base64
 import io
 import json
 import math
+import re
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -67,6 +68,28 @@ DEFAULT_IMAGE_OPTIONS: dict[str, Any] = {
     "num_predict": 80,
 }
 """Default Ollama generation options for image description."""
+
+DEFAULT_RISK_MODEL = "qwen3.5:0.8b"
+"""Default text model used for environmental risk classification."""
+
+DEFAULT_RISK_PROMPT = (
+    "You are an environmental risk analyst. Given the following satellite "
+    "image description, classify the environmental danger level.\n\n"
+    "You MUST respond in EXACTLY this format (three lines, nothing else):\n\n"
+    "Level: <number from 1 to 5>\n"
+    "Label: <one of: Very Low, Low, Moderate, High, Critical>\n"
+    "Reason: <one sentence explaining the risk>\n\n"
+    "Scale: 1=Very Low, 2=Low, 3=Moderate, 4=High, 5=Critical.\n\n"
+    "Image description:\n"
+)
+"""Default prompt used for risk classification."""
+
+DEFAULT_RISK_OPTIONS: dict[str, Any] = {
+    "temperature": 0.1,
+    "top_p": 0.9,
+    "num_predict": 120,
+}
+"""Default Ollama generation options for risk classification."""
 
 
 def _is_valid_input(latitude: float, longitude: float, zoom: int) -> bool:
@@ -248,6 +271,23 @@ def _image_description_config() -> tuple[str, str, dict[str, Any]]:
     return model, prompt, options
 
 
+def _risk_classification_config() -> tuple[str, str, dict[str, Any]]:
+    """Return risk classification model settings from YAML with safe defaults."""
+    config = _load_models_config()
+    section = config.get("risk_classification", {})
+    if not isinstance(section, dict):
+        section = {}
+
+    model = str(section.get("model", DEFAULT_RISK_MODEL)).strip() or DEFAULT_RISK_MODEL
+    prompt = str(section.get("prompt", DEFAULT_RISK_PROMPT)).strip() or DEFAULT_RISK_PROMPT
+
+    options = section.get("options", DEFAULT_RISK_OPTIONS)
+    if not isinstance(options, dict):
+        options = DEFAULT_RISK_OPTIONS
+
+    return model, prompt, options
+
+
 def _encode_image_for_ollama(image_file: Path, max_size: int = 448) -> str:
     """Return a base64 JPEG string optimized for faster multimodal inference.
 
@@ -360,6 +400,99 @@ def fetch_satellite_image(
     return None
 
 
+def _parse_risk_response(text: str) -> tuple[int, str, str]:
+    """Extract (level, label, reason) from a structured risk response.
+
+    Falls back to ``(0, "Unknown", "")`` when the response cannot be parsed.
+    """
+    level = 0
+    label = "Unknown"
+    reason = ""
+
+    level_match = re.search(r"Level\s*:\s*(\d)", text, re.IGNORECASE)
+    if level_match:
+        parsed = int(level_match.group(1))
+        if 1 <= parsed <= 5:
+            level = parsed
+
+    label_match = re.search(
+        r"Label\s*:\s*(Very Low|Low|Moderate|High|Critical)",
+        text,
+        re.IGNORECASE,
+    )
+    if label_match:
+        label = label_match.group(1).title()
+
+    reason_match = re.search(r"Reason\s*:\s*(.+)", text, re.IGNORECASE)
+    if reason_match:
+        reason = reason_match.group(1).strip()
+
+    return level, label, reason
+
+
+def classify_risk(description: str) -> dict:
+    """Classify environmental risk from a satellite image description.
+
+    Parameters
+    ----------
+    description : str
+        Natural-language description of the satellite image.
+
+    Returns
+    -------
+    dict
+        Classification result with keys ``danger_level``, ``danger_label``,
+        ``danger_reason``, ``text_description``, ``text_model``, and
+        ``text_prompt``.
+    """
+    model_name, prompt_template, options = _risk_classification_config()
+    full_prompt = f"{prompt_template}\n{description}"
+
+    fallback: dict[str, Any] = {
+        "danger_level": 0,
+        "danger_label": "Unknown",
+        "danger_reason": "",
+        "text_description": "",
+        "text_model": model_name,
+        "text_prompt": full_prompt,
+    }
+
+    if not _ensure_ollama_model(model_name):
+        return fallback
+
+    payload = {
+        "model": model_name,
+        "prompt": full_prompt,
+        "options": options,
+        "think": False,
+        "stream": False,
+    }
+
+    result = _ollama_request("/api/generate", payload=payload, timeout=120)
+    if result is None:
+        print(f"[classify_risk] Ollama returned None for model={model_name}")
+        return fallback
+
+    raw_response = str(result.get("response", "")).strip()
+    # Strip <think>...</think> blocks in case thinking mode leaked through
+    raw_response = re.sub(r"<think>.*?</think>", "", raw_response, flags=re.DOTALL).strip()
+    if not raw_response:
+        print("[classify_risk] Empty response from model")
+        return fallback
+
+    print(f"[classify_risk] Raw response: {raw_response!r}")
+    level, label, reason = _parse_risk_response(raw_response)
+
+    return {
+        "danger_level": level,
+        "danger_label": label,
+        "danger_reason": reason,
+        "text_description": raw_response,
+        "text_model": model_name,
+        "text_prompt": full_prompt,
+    }
+
+
 def analyze_image(image_path: str) -> dict:
     """Send a satellite image to the AI model for analysis.
 
@@ -426,10 +559,16 @@ def analyze_image(image_path: str) -> dict:
     if not description:
         description = "No description generated by the model."
 
+    risk = classify_risk(description)
+
     return {
         "description": description,
-        "danger_level": 0,
-        "danger_label": "Unknown",
+        "danger_level": risk["danger_level"],
+        "danger_label": risk["danger_label"],
+        "danger_reason": risk["danger_reason"],
+        "text_description": risk["text_description"],
+        "text_model": risk["text_model"],
+        "text_prompt": risk["text_prompt"],
     }
 
 
@@ -446,6 +585,21 @@ def get_image_model_display_name() -> str:
     if isinstance(section, dict) and section.get("display_name"):
         return str(section["display_name"]).strip()
     return get_image_model_name()
+
+
+def get_risk_model_name() -> str:
+    """Return the configured risk-classification model name."""
+    model, _, _ = _risk_classification_config()
+    return model
+
+
+def get_risk_model_display_name() -> str:
+    """Return the human-friendly display name for the risk model."""
+    config = _load_models_config()
+    section = config.get("risk_classification", {})
+    if isinstance(section, dict) and section.get("display_name"):
+        return str(section["display_name"]).strip()
+    return get_risk_model_name()
 
 
 def ollama_has_model(model_name: str) -> bool:

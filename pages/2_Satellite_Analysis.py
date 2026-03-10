@@ -17,6 +17,8 @@ from app.ai_pipeline import (
     fetch_satellite_image,
     get_image_model_display_name,
     get_image_model_name,
+    get_risk_model_display_name,
+    get_risk_model_name,
     load_previous_analysis,
     ollama_has_model,
     pull_model_stream,
@@ -139,10 +141,6 @@ def page() -> None:
             _render_placeholder(latitude, longitude, zoom)
             return
 
-        st.subheader("Satellite Image")
-        st.image(image_path, use_container_width=True)
-        st.caption(f"({latitude:.4f}, {longitude:.4f}) · zoom {zoom}")
-
         # ── Model download (only when not already present) ──────── #
         model_name = get_image_model_name()
         model_ready = ollama_has_model(model_name)
@@ -173,10 +171,10 @@ def page() -> None:
                     mb_total = total / 1_048_576
                     progress_slot.progress(
                         fraction,
-                        text=f"{status_text} — {mb_done:.0f} MB / {mb_total:.0f} MB",
+                        text=f"Downloading {display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
                     )
                 else:
-                    status_slot.text(f"⏳ {status_text}")
+                    status_slot.text(f"⏳ {display_name}: {status_text}")
 
                 if status_text == "success":
                     model_ready = True
@@ -186,7 +184,53 @@ def page() -> None:
                     break
 
         if not model_ready:
-            st.error("Model is not available. Cannot run analysis.")
+            st.error("Image model is not available. Cannot run analysis.")
+            return
+
+        # ── Risk classification model download ────────────────────── #
+        risk_model_name = get_risk_model_name()
+        risk_model_ready = ollama_has_model(risk_model_name)
+
+        if not risk_model_ready:
+            risk_info_slot = st.empty()
+            risk_display_name = get_risk_model_display_name()
+            risk_info_slot.info(f"Classification model **{risk_display_name}** not found locally — downloading…")
+            risk_status_slot = st.empty()
+            risk_progress_slot = st.empty()
+            risk_progress_slot.progress(0.0, text="Starting download…")
+
+            for event in pull_model_stream(risk_model_name):
+                status_text = event.get("status", "")
+                total = event.get("total", 0)
+                completed = event.get("completed", 0)
+
+                if status_text.startswith("error:"):
+                    risk_info_slot.empty()
+                    risk_status_slot.empty()
+                    risk_progress_slot.empty()
+                    st.error(f"Classification model download failed: {status_text}")
+                    return
+
+                if total and total > 0:
+                    fraction = min(completed / total, 1.0)
+                    mb_done = completed / 1_048_576
+                    mb_total = total / 1_048_576
+                    risk_progress_slot.progress(
+                        fraction,
+                        text=f"Downloading {risk_display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
+                    )
+                else:
+                    risk_status_slot.text(f"⏳ {risk_display_name}: {status_text}")
+
+                if status_text == "success":
+                    risk_model_ready = True
+                    risk_info_slot.empty()
+                    risk_status_slot.empty()
+                    risk_progress_slot.empty()
+                    break
+
+        if not risk_model_ready:
+            st.error("Classification model is not available. Cannot run analysis.")
             return
 
         analysis_info = st.empty()
@@ -262,6 +306,10 @@ def _render_result(result: dict) -> None:
     level = analysis.get("danger_level", 0)
     label = analysis.get("danger_label", "Unknown")
     st.markdown(_danger_badge(level, label), unsafe_allow_html=True)
+
+    danger_reason = analysis.get("danger_reason", "")
+    if danger_reason:
+        st.markdown(f"**Reason:** {danger_reason}")
 
 
 page()

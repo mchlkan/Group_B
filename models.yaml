@@ -12,10 +12,21 @@ image_description:
     num_predict: 256
 
 risk_classification:
-  model: qwen2.5:1.5b
+  model: qwen3.5:0.8b
+  display_name: Qwen 3.5 0.8B
   prompt: >
-    Based on the image description, classify environmental risk as
-    Very Low, Low, Moderate, High, or Critical. Explain briefly.
+    You are an environmental risk analyst. Given the following satellite
+    image description, classify the environmental danger level.
+
+    You MUST respond in EXACTLY this format (three lines, nothing else):
+
+    Level: <number from 1 to 5>
+    Label: <one of: Very Low, Low, Moderate, High, Critical>
+    Reason: <one sentence explaining the risk>
+
+    Scale: 1=Very Low, 2=Low, 3=Moderate, 4=High, 5=Critical.
+
+    Image description:
   options:
     temperature: 0.1
     top_p: 0.9
