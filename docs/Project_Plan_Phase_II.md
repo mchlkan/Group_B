@@ -16,9 +16,9 @@ Scale the app with a working AI workflow (satellite image -> image description -
 - [x] Coordinate + zoom inputs 
 - [x] Clickable map for coordinate selection
 - [ ] Real ESRI World Imagery download is implemented
-- [ ] Real Ollama image analysis is implemented
+- [x] Real Ollama image analysis is implemented
 - [ ] Real Ollama danger/risk text analysis is implemented
-- [ ] `models.yaml` exists and is used by the app
+- [x] `models.yaml` exists and is used by the app
 - [ ] `database/images.csv` exists and is actively appended
 - [ ] Cache/reuse logic exists (skip pipeline if settings already processed)
 - [ ] README fully updated for Part II requirements
