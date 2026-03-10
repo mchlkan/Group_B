@@ -15,7 +15,7 @@ import math
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from PIL import Image
 import yaml
@@ -50,7 +50,7 @@ OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 MODELS_CONFIG_PATH = Path("models.yaml")
 """Repository-level YAML config for AI model and prompt settings."""
 
-DEFAULT_IMAGE_MODEL = "qwen2.5vl:3b"
+DEFAULT_IMAGE_MODEL = "qwen3.5:2b"
 """Default lightweight multimodal model used for image description."""
 
 DEFAULT_IMAGE_PROMPT = (
@@ -271,12 +271,10 @@ def _ollama_has_model(model_name: str) -> bool:
 
     models = tags.get("models", [])
     target = model_name.strip()
-    target_base = target.split(":", maxsplit=1)[0]
 
     for model in models:
         local_name = str(model.get("name", "")).strip()
-        local_base = local_name.split(":", maxsplit=1)[0]
-        if local_name == target or local_base == target_base:
+        if local_name == target:
             return True
     return False
 
@@ -433,6 +431,60 @@ def analyze_image(image_path: str) -> dict:
         "danger_level": 0,
         "danger_label": "Unknown",
     }
+
+
+def get_image_model_name() -> str:
+    """Return the configured image-description model name."""
+    model, _, _ = _image_description_config()
+    return model
+
+
+def get_image_model_display_name() -> str:
+    """Return the human-friendly display name for the image model."""
+    config = _load_models_config()
+    section = config.get("image_description", {})
+    if isinstance(section, dict) and section.get("display_name"):
+        return str(section["display_name"]).strip()
+    return get_image_model_name()
+
+
+def ollama_has_model(model_name: str) -> bool:
+    """Return ``True`` if Ollama has *model_name* available locally."""
+    return _ollama_has_model(model_name)
+
+
+def pull_model_stream(model_name: str) -> Iterator[dict]:
+    """Stream pull-progress events from Ollama for *model_name*.
+
+    Yields one ``dict`` per progress line reported by Ollama.  Each dict
+    contains at least a ``"status"`` key and optionally ``"total"`` and
+    ``"completed"`` (bytes) when a layer is being downloaded.
+
+    Yields ``{"status": "error: <msg>"}`` and stops on any failure.
+    """
+    url = f"{OLLAMA_BASE_URL}/api/pull"
+    payload = json.dumps({"name": model_name, "stream": True}).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=600) as response:
+            for raw_line in response:
+                line = raw_line.decode("utf-8").strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                yield event
+                if event.get("status") == "success":
+                    return
+    except Exception as exc:
+        yield {"status": f"error: {type(exc).__name__}: {exc}"}
 
 
 def save_analysis(

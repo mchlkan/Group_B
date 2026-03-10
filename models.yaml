@@ -1,5 +1,6 @@
 image_description:
-  model: qwen3.5:4b
+  model: qwen3.5:2b
+  display_name: Qwen 3.5 2B
   prompt: >
     Describe this satellite image in 4-6 concise sentences.
     Focus on land cover, visible human activity, vegetation, water,
@@ -8,7 +9,7 @@ image_description:
   options:
     temperature: 0.2
     top_p: 0.9
-    num_predict: 60
+    num_predict: 256
 
 risk_classification:
   model: qwen2.5:1.5b
