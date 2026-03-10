@@ -56,9 +56,12 @@ DEFAULT_IMAGE_MODEL = "qwen3.5:2b"
 
 DEFAULT_IMAGE_PROMPT = (
     "Describe this satellite image in 4-6 concise sentences. "
-    "Focus on land cover, visible human activity, vegetation, water, and any "
-    "obvious signs of deforestation, drought, fire scars, flooding, erosion, "
-    "or pollution."
+    "Focus on land cover, vegetation health and coverage, water "
+    "bodies, and any signs of environmental degradation such as "
+    "deforestation, drought, fire scars, flooding, erosion, "
+    "pollution, or bare/degraded soil. Note whether vegetation "
+    "appears healthy or stressed, and whether natural areas appear "
+    "intact or damaged."
 )
 """Default prompt used for image-to-text description."""
 
@@ -69,17 +72,31 @@ DEFAULT_IMAGE_OPTIONS: dict[str, Any] = {
 }
 """Default Ollama generation options for image description."""
 
-DEFAULT_RISK_MODEL = "qwen3.5:0.8b"
+DEFAULT_RISK_MODEL = "qwen3.5:4b"
 """Default text model used for environmental risk classification."""
 
 DEFAULT_RISK_PROMPT = (
     "You are an environmental risk analyst. Given the following satellite "
-    "image description, classify the environmental danger level.\n\n"
+    "image description, classify the environmental danger level.\n"
+    "Focus ONLY on environmental DEGRADATION: deforestation, drought, "
+    "fire scars, flooding, erosion, pollution, and land degradation. "
+    "IMPORTANT: Natural landscapes are NOT dangerous even if they look "
+    "sparse. Savanna, scrubland, steppe, arid woodland, and other "
+    "naturally sparse biomes with scattered trees and bare soil between "
+    "them are HEALTHY ecosystems — rate them 1 or 2. Cities and towns "
+    "with green space are also low risk. Only rate 3+ when you see "
+    "ACTUAL DAMAGE like clear-cut areas, burn marks, polluted water, "
+    "or eroded hillsides.\n\n"
+    "Scoring criteria:\n"
+    "1 (Very Low): Natural landscape — forest, savanna, grassland, scrubland, or any area with no visible damage.\n"
+    "2 (Low): Mostly natural with minor human presence (roads, small farms) but no visible environmental damage.\n"
+    "3 (Moderate): Visible signs of environmental stress — patches of cleared forest, early erosion, or degraded vegetation that looks unnatural.\n"
+    "4 (High): Clear environmental damage — active deforestation, visible pollution, significant erosion, or drought-stressed/dying vegetation.\n"
+    "5 (Critical): Severe destruction — large-scale deforestation, heavy pollution, fire scars, barren degraded land, or severe flooding.\n\n"
     "You MUST respond in EXACTLY this format (three lines, nothing else):\n\n"
     "Level: <number from 1 to 5>\n"
     "Label: <one of: Very Low, Low, Moderate, High, Critical>\n"
     "Reason: <one sentence explaining the risk>\n\n"
-    "Scale: 1=Very Low, 2=Low, 3=Moderate, 4=High, 5=Critical.\n\n"
     "Image description:\n"
 )
 """Default prompt used for risk classification."""
