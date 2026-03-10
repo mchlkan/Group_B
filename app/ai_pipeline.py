@@ -210,7 +210,7 @@ def _download_to_path(
             if not image_bytes:
                 raise ValueError("Empty response body.")
             output_path.write_bytes(image_bytes)
-            return output_path.exists() and output_path.stat().st_size > 0
+            return True
         except (OSError, ValueError) as exc:
             logger.warning(
                 "[fetch_satellite_image] attempt=%d/%d failed url=%s error=%s: %s",

@@ -60,7 +60,7 @@ def _download_model(model_name: str, display_name: str) -> bool:
             st.error(f"Download failed: {status_text}")
             return False
 
-        if total and total > 0:
+        if total:
             fraction = min(completed / total, 1.0)
             mb_done = completed / 1_048_576
             mb_total = total / 1_048_576
@@ -191,11 +191,6 @@ def page() -> None:
                 display_name = get_image_model_display_name()
                 if not _download_model(model_name, display_name):
                     return
-                model_ready = True
-
-            if not model_ready:
-                st.error("Image model is not available. Cannot run analysis.")
-                return
 
             # ── Risk classification model download ────────────────────── #
             risk_model_name = get_risk_model_name()
@@ -205,11 +200,6 @@ def page() -> None:
                 risk_display_name = get_risk_model_display_name()
                 if not _download_model(risk_model_name, risk_display_name):
                     return
-                risk_model_ready = True
-
-            if not risk_model_ready:
-                st.error("Classification model is not available. Cannot run analysis.")
-                return
 
             analysis_info = st.empty()
             analysis_info.info("Running AI analysis on this image…")
