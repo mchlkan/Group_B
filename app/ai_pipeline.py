@@ -19,8 +19,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Iterator
 
-from PIL import Image
 import yaml
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 
 class OllamaUnavailableError(RuntimeError):
     """Raised when the Ollama server cannot be reached."""
+
 
 MODELS_CONFIG_PATH = Path("models.yaml")
 """Repository-level YAML config for AI model and prompt settings."""
@@ -118,10 +119,14 @@ DEFAULT_RISK_OPTIONS: dict[str, Any] = {
 
 def _is_valid_input(latitude: float, longitude: float, zoom: int) -> bool:
     """Return ``True`` when latitude/longitude/zoom are within bounds."""
-    return -90.0 <= latitude <= 90.0 and -180.0 <= longitude <= 180.0 and 1 <= zoom <= 18
+    return (
+        -90.0 <= latitude <= 90.0 and -180.0 <= longitude <= 180.0 and 1 <= zoom <= 18
+    )
 
 
-def _tile_xy_from_latlon(latitude: float, longitude: float, zoom: int) -> tuple[int, int]:
+def _tile_xy_from_latlon(
+    latitude: float, longitude: float, zoom: int
+) -> tuple[int, int]:
     """Convert geographic coordinates to integer Slippy Map tile indices.
 
     Parameters
@@ -144,9 +149,10 @@ def _tile_xy_from_latlon(latitude: float, longitude: float, zoom: int) -> tuple[
     x_float = (longitude + 180.0) / 360.0 * n_tiles
     lat_rad = math.radians(lat_clamped)
     y_float = (
-        1.0
-        - math.log(math.tan(lat_rad) + (1.0 / math.cos(lat_rad))) / math.pi
-    ) / 2.0 * n_tiles
+        (1.0 - math.log(math.tan(lat_rad) + (1.0 / math.cos(lat_rad))) / math.pi)
+        / 2.0
+        * n_tiles
+    )
 
     x_tile = min(n_tiles - 1, max(0, int(x_float)))
     y_tile = min(n_tiles - 1, max(0, int(y_float)))
@@ -164,7 +170,9 @@ def _lat_from_tile_y(tile_y: int, zoom: int) -> float:
     return math.degrees(math.atan(math.sinh(n)))
 
 
-def _bbox_for_coordinate(latitude: float, longitude: float, zoom: int) -> tuple[float, float, float, float]:
+def _bbox_for_coordinate(
+    latitude: float, longitude: float, zoom: int
+) -> tuple[float, float, float, float]:
     """Build a WGS84 bounding box for the tile containing the coordinate.
 
     Returns
@@ -214,7 +222,11 @@ def _download_to_path(
         except (OSError, ValueError) as exc:
             logger.warning(
                 "[fetch_satellite_image] attempt=%d/%d failed url=%s error=%s: %s",
-                attempt, attempts, url, type(exc).__name__, exc,
+                attempt,
+                attempts,
+                url,
+                type(exc).__name__,
+                exc,
             )
 
     return False
@@ -287,8 +299,12 @@ def _image_description_config() -> tuple[str, str, dict[str, Any]]:
     if not isinstance(section, dict):
         section = {}
 
-    model = str(section.get("model", DEFAULT_IMAGE_MODEL)).strip() or DEFAULT_IMAGE_MODEL
-    prompt = str(section.get("prompt", DEFAULT_IMAGE_PROMPT)).strip() or DEFAULT_IMAGE_PROMPT
+    model = (
+        str(section.get("model", DEFAULT_IMAGE_MODEL)).strip() or DEFAULT_IMAGE_MODEL
+    )
+    prompt = (
+        str(section.get("prompt", DEFAULT_IMAGE_PROMPT)).strip() or DEFAULT_IMAGE_PROMPT
+    )
 
     options = section.get("options", DEFAULT_IMAGE_OPTIONS)
     if not isinstance(options, dict):
@@ -305,7 +321,9 @@ def _risk_classification_config() -> tuple[str, str, dict[str, Any]]:
         section = {}
 
     model = str(section.get("model", DEFAULT_RISK_MODEL)).strip() or DEFAULT_RISK_MODEL
-    prompt = str(section.get("prompt", DEFAULT_RISK_PROMPT)).strip() or DEFAULT_RISK_PROMPT
+    prompt = (
+        str(section.get("prompt", DEFAULT_RISK_PROMPT)).strip() or DEFAULT_RISK_PROMPT
+    )
 
     options = section.get("options", DEFAULT_RISK_OPTIONS)
     if not isinstance(options, dict):
@@ -499,7 +517,9 @@ def classify_risk(description: str) -> dict:
 
     raw_response = str(result.get("response", "")).strip()
     # Strip <think>...</think> blocks in case thinking mode leaked through
-    raw_response = re.sub(r"<think>.*?</think>", "", raw_response, flags=re.DOTALL).strip()
+    raw_response = re.sub(
+        r"<think>.*?</think>", "", raw_response, flags=re.DOTALL
+    ).strip()
     if not raw_response:
         logger.warning("[classify_risk] Empty response from model")
         return fallback

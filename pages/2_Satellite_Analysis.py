@@ -12,19 +12,13 @@ import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
-from app.ai_pipeline import (
-    OllamaUnavailableError,
-    analyze_image,
-    fetch_satellite_image,
-    get_image_model_display_name,
-    get_image_model_name,
-    get_risk_model_display_name,
-    get_risk_model_name,
-    load_previous_analysis,
-    ollama_has_model,
-    pull_model_stream,
-    save_analysis,
-)
+from app.ai_pipeline import (OllamaUnavailableError, analyze_image,
+                             fetch_satellite_image,
+                             get_image_model_display_name,
+                             get_image_model_name, get_risk_model_display_name,
+                             get_risk_model_name, load_previous_analysis,
+                             ollama_has_model, pull_model_stream,
+                             save_analysis)
 
 # ------------------------------------------------------------------ #
 #  Danger-level colour mapping                                         #

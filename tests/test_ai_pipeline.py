@@ -2,29 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
-from app.ai_pipeline import (
-    IMAGE_DIR,
-    _bbox_for_coordinate,
-    _image_description_config,
-    _image_filename,
-    _is_valid_input,
-    _load_models_config,
-    _parse_risk_response,
-    _risk_classification_config,
-    _tile_xy_from_latlon,
-    DEFAULT_IMAGE_MODEL,
-    DEFAULT_IMAGE_PROMPT,
-    DEFAULT_IMAGE_OPTIONS,
-    DEFAULT_RISK_MODEL,
-    DEFAULT_RISK_PROMPT,
-    DEFAULT_RISK_OPTIONS,
-    MODELS_CONFIG_PATH,
-)
-
+from app.ai_pipeline import (DEFAULT_IMAGE_MODEL, DEFAULT_IMAGE_OPTIONS,
+                             DEFAULT_IMAGE_PROMPT, DEFAULT_RISK_MODEL,
+                             DEFAULT_RISK_OPTIONS, DEFAULT_RISK_PROMPT,
+                             IMAGE_DIR, _bbox_for_coordinate,
+                             _image_description_config, _image_filename,
+                             _is_valid_input, _load_models_config,
+                             _parse_risk_response, _risk_classification_config,
+                             _tile_xy_from_latlon)
 
 # ── _is_valid_input ────────────────────────────────────────────────── #
 
@@ -142,7 +127,9 @@ class TestParseRiskResponse:
         assert reason == ""
 
     def test_level_outside_range(self):
-        level, label, reason = _parse_risk_response("Level: 9\nLabel: High\nReason: Bad.")
+        level, label, reason = _parse_risk_response(
+            "Level: 9\nLabel: High\nReason: Bad."
+        )
         assert level == 0  # 9 is outside 1-5, so rejected
         assert label == "High"
 
@@ -169,7 +156,9 @@ class TestParseRiskResponse:
 
 class TestLoadModelsConfig:
     def test_missing_file_returns_empty(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("app.ai_pipeline.MODELS_CONFIG_PATH", tmp_path / "nope.yaml")
+        monkeypatch.setattr(
+            "app.ai_pipeline.MODELS_CONFIG_PATH", tmp_path / "nope.yaml"
+        )
         assert _load_models_config() == {}
 
     def test_valid_yaml(self, tmp_path, monkeypatch):
@@ -197,14 +186,18 @@ class TestLoadModelsConfig:
 
 class TestConfigHelpers:
     def test_image_description_defaults(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("app.ai_pipeline.MODELS_CONFIG_PATH", tmp_path / "nope.yaml")
+        monkeypatch.setattr(
+            "app.ai_pipeline.MODELS_CONFIG_PATH", tmp_path / "nope.yaml"
+        )
         model, prompt, options = _image_description_config()
         assert model == DEFAULT_IMAGE_MODEL
         assert prompt == DEFAULT_IMAGE_PROMPT
         assert options == DEFAULT_IMAGE_OPTIONS
 
     def test_risk_classification_defaults(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("app.ai_pipeline.MODELS_CONFIG_PATH", tmp_path / "nope.yaml")
+        monkeypatch.setattr(
+            "app.ai_pipeline.MODELS_CONFIG_PATH", tmp_path / "nope.yaml"
+        )
         model, prompt, options = _risk_classification_config()
         assert model == DEFAULT_RISK_MODEL
         assert prompt == DEFAULT_RISK_PROMPT.strip()
