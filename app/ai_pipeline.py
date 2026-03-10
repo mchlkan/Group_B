@@ -48,6 +48,10 @@ IMAGE_SIZE_PX = 1024
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 """Base URL for the local Ollama HTTP server."""
 
+
+class OllamaUnavailableError(RuntimeError):
+    """Raised when the Ollama server cannot be reached."""
+
 MODELS_CONFIG_PATH = Path("models.yaml")
 """Repository-level YAML config for AI model and prompt settings."""
 
@@ -238,8 +242,11 @@ def _ollama_request(
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read().decode("utf-8").strip()
-    except Exception:
-        return None
+    except OSError as exc:
+        raise OllamaUnavailableError(
+            f"Ollama is not reachable at {OLLAMA_BASE_URL}. "
+            "Make sure Ollama is installed and running."
+        ) from exc
 
     if not raw:
         return {}
@@ -345,13 +352,11 @@ def _ensure_ollama_model(model_name: str) -> bool:
         "name": model_name,
         "stream": False,
     }
-    pulled = _ollama_request(
+    _ollama_request(
         "/api/pull",
         payload=pull_payload,
         timeout=600,
     )
-    if pulled is None:
-        return False
 
     return _ollama_has_model(model_name)
 

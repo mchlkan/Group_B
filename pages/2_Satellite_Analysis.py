@@ -13,6 +13,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from app.ai_pipeline import (
+    OllamaUnavailableError,
     analyze_image,
     fetch_satellite_image,
     get_image_model_display_name,
@@ -142,114 +143,121 @@ def page() -> None:
             return
 
         # ── Model download (only when not already present) ──────── #
-        model_name = get_image_model_name()
-        model_ready = ollama_has_model(model_name)
+        try:
+            model_name = get_image_model_name()
+            model_ready = ollama_has_model(model_name)
 
-        if not model_ready:
-            info_slot = st.empty()
-            display_name = get_image_model_display_name()
-            info_slot.info(f"Model **{display_name}** not found locally — downloading…")
-            status_slot = st.empty()
-            progress_slot = st.empty()
-            progress_slot.progress(0.0, text="Starting download…")
+            if not model_ready:
+                info_slot = st.empty()
+                display_name = get_image_model_display_name()
+                info_slot.info(f"Model **{display_name}** not found locally — downloading…")
+                status_slot = st.empty()
+                progress_slot = st.empty()
+                progress_slot.progress(0.0, text="Starting download…")
 
-            for event in pull_model_stream(model_name):
-                status_text = event.get("status", "")
-                total = event.get("total", 0)
-                completed = event.get("completed", 0)
+                for event in pull_model_stream(model_name):
+                    status_text = event.get("status", "")
+                    total = event.get("total", 0)
+                    completed = event.get("completed", 0)
 
-                if status_text.startswith("error:"):
-                    info_slot.empty()
-                    status_slot.empty()
-                    progress_slot.empty()
-                    st.error(f"Download failed: {status_text}")
-                    return
+                    if status_text.startswith("error:"):
+                        info_slot.empty()
+                        status_slot.empty()
+                        progress_slot.empty()
+                        st.error(f"Download failed: {status_text}")
+                        return
 
-                if total and total > 0:
-                    fraction = min(completed / total, 1.0)
-                    mb_done = completed / 1_048_576
-                    mb_total = total / 1_048_576
-                    progress_slot.progress(
-                        fraction,
-                        text=f"Downloading {display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
-                    )
-                else:
-                    status_slot.text(f"⏳ {display_name}: {status_text}")
+                    if total and total > 0:
+                        fraction = min(completed / total, 1.0)
+                        mb_done = completed / 1_048_576
+                        mb_total = total / 1_048_576
+                        progress_slot.progress(
+                            fraction,
+                            text=f"Downloading {display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
+                        )
+                    else:
+                        status_slot.text(f"⏳ {display_name}: {status_text}")
 
-                if status_text == "success":
-                    model_ready = True
-                    info_slot.empty()
-                    status_slot.empty()
-                    progress_slot.empty()
-                    break
+                    if status_text == "success":
+                        model_ready = True
+                        info_slot.empty()
+                        status_slot.empty()
+                        progress_slot.empty()
+                        break
 
-        if not model_ready:
-            st.error("Image model is not available. Cannot run analysis.")
+            if not model_ready:
+                st.error("Image model is not available. Cannot run analysis.")
+                return
+
+            # ── Risk classification model download ────────────────────── #
+            risk_model_name = get_risk_model_name()
+            risk_model_ready = ollama_has_model(risk_model_name)
+
+            if not risk_model_ready:
+                risk_info_slot = st.empty()
+                risk_display_name = get_risk_model_display_name()
+                risk_info_slot.info(f"Classification model **{risk_display_name}** not found locally — downloading…")
+                risk_status_slot = st.empty()
+                risk_progress_slot = st.empty()
+                risk_progress_slot.progress(0.0, text="Starting download…")
+
+                for event in pull_model_stream(risk_model_name):
+                    status_text = event.get("status", "")
+                    total = event.get("total", 0)
+                    completed = event.get("completed", 0)
+
+                    if status_text.startswith("error:"):
+                        risk_info_slot.empty()
+                        risk_status_slot.empty()
+                        risk_progress_slot.empty()
+                        st.error(f"Classification model download failed: {status_text}")
+                        return
+
+                    if total and total > 0:
+                        fraction = min(completed / total, 1.0)
+                        mb_done = completed / 1_048_576
+                        mb_total = total / 1_048_576
+                        risk_progress_slot.progress(
+                            fraction,
+                            text=f"Downloading {risk_display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
+                        )
+                    else:
+                        risk_status_slot.text(f"⏳ {risk_display_name}: {status_text}")
+
+                    if status_text == "success":
+                        risk_model_ready = True
+                        risk_info_slot.empty()
+                        risk_status_slot.empty()
+                        risk_progress_slot.empty()
+                        break
+
+            if not risk_model_ready:
+                st.error("Classification model is not available. Cannot run analysis.")
+                return
+
+            analysis_info = st.empty()
+            analysis_info.info("Running AI analysis on this image…")
+
+            with st.spinner("Running AI analysis..."):
+                analysis = analyze_image(image_path)
+
+            analysis_info.empty()
+
+            save_analysis(latitude, longitude, zoom, image_path, analysis)
+
+            st.session_state["sat_result"] = {
+                "image_path": image_path,
+                "analysis": analysis,
+                "latitude": latitude,
+                "longitude": longitude,
+                "zoom": zoom,
+            }
+        except OllamaUnavailableError as exc:
+            st.error(
+                f"**Ollama is not running.**\n\n{exc}\n\n"
+                "Please start Ollama (`ollama serve`) and try again."
+            )
             return
-
-        # ── Risk classification model download ────────────────────── #
-        risk_model_name = get_risk_model_name()
-        risk_model_ready = ollama_has_model(risk_model_name)
-
-        if not risk_model_ready:
-            risk_info_slot = st.empty()
-            risk_display_name = get_risk_model_display_name()
-            risk_info_slot.info(f"Classification model **{risk_display_name}** not found locally — downloading…")
-            risk_status_slot = st.empty()
-            risk_progress_slot = st.empty()
-            risk_progress_slot.progress(0.0, text="Starting download…")
-
-            for event in pull_model_stream(risk_model_name):
-                status_text = event.get("status", "")
-                total = event.get("total", 0)
-                completed = event.get("completed", 0)
-
-                if status_text.startswith("error:"):
-                    risk_info_slot.empty()
-                    risk_status_slot.empty()
-                    risk_progress_slot.empty()
-                    st.error(f"Classification model download failed: {status_text}")
-                    return
-
-                if total and total > 0:
-                    fraction = min(completed / total, 1.0)
-                    mb_done = completed / 1_048_576
-                    mb_total = total / 1_048_576
-                    risk_progress_slot.progress(
-                        fraction,
-                        text=f"Downloading {risk_display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
-                    )
-                else:
-                    risk_status_slot.text(f"⏳ {risk_display_name}: {status_text}")
-
-                if status_text == "success":
-                    risk_model_ready = True
-                    risk_info_slot.empty()
-                    risk_status_slot.empty()
-                    risk_progress_slot.empty()
-                    break
-
-        if not risk_model_ready:
-            st.error("Classification model is not available. Cannot run analysis.")
-            return
-
-        analysis_info = st.empty()
-        analysis_info.info("Running AI analysis on this image…")
-
-        with st.spinner("Running AI analysis..."):
-            analysis = analyze_image(image_path)
-
-        analysis_info.empty()
-
-        save_analysis(latitude, longitude, zoom, image_path, analysis)
-
-        st.session_state["sat_result"] = {
-            "image_path": image_path,
-            "analysis": analysis,
-            "latitude": latitude,
-            "longitude": longitude,
-            "zoom": zoom,
-        }
 
     result = st.session_state.get("sat_result")
     if result:
