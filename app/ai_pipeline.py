@@ -1,9 +1,9 @@
-"""AI pipeline stub — interface for backend teammates.
+"""AI pipeline — satellite image retrieval and AI-powered risk analysis.
 
-This module defines the function signatures that the Satellite Analysis
-page calls.  Each function currently returns placeholder data so the UI
-can render.  Teammates will replace the bodies with real implementations
-(Ollama calls, satellite tile downloads, database lookups, etc.).
+This module implements the full AI analysis workflow for Project Okavango:
+satellite tile downloading from ArcGIS, image description via a local
+Ollama multimodal model, and environmental risk classification.  Model
+and prompt settings are configurable through ``models.yaml``.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import logging
 import math
 import re
 import urllib.parse
@@ -20,6 +21,8 @@ from typing import Any, Iterator
 
 from PIL import Image
 import yaml
+
+logger = logging.getLogger(__name__)
 
 ESRI_EXPORT_URL = (
     "https://services.arcgisonline.com/ArcGIS/rest/services/"
@@ -208,11 +211,10 @@ def _download_to_path(
                 raise ValueError("Empty response body.")
             output_path.write_bytes(image_bytes)
             return output_path.exists() and output_path.stat().st_size > 0
-        except Exception as exc:
-            # Keep logs concise but visible in Streamlit Cloud runtime logs.
-            print(
-                f"[fetch_satellite_image] attempt={attempt}/{attempts} "
-                f"failed url={url} error={type(exc).__name__}: {exc}",
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                "[fetch_satellite_image] attempt=%d/%d failed url=%s error=%s: %s",
+                attempt, attempts, url, type(exc).__name__, exc,
             )
 
     return False
@@ -272,7 +274,7 @@ def _load_models_config() -> dict[str, Any]:
 
     try:
         loaded = yaml.safe_load(MODELS_CONFIG_PATH.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, yaml.YAMLError):
         return {}
 
     return loaded if isinstance(loaded, dict) else {}
@@ -492,17 +494,17 @@ def classify_risk(description: str) -> dict:
 
     result = _ollama_request("/api/generate", payload=payload, timeout=120)
     if result is None:
-        print(f"[classify_risk] Ollama returned None for model={model_name}")
+        logger.warning("[classify_risk] Ollama returned None for model=%s", model_name)
         return fallback
 
     raw_response = str(result.get("response", "")).strip()
     # Strip <think>...</think> blocks in case thinking mode leaked through
     raw_response = re.sub(r"<think>.*?</think>", "", raw_response, flags=re.DOTALL).strip()
     if not raw_response:
-        print("[classify_risk] Empty response from model")
+        logger.warning("[classify_risk] Empty response from model")
         return fallback
 
-    print(f"[classify_risk] Raw response: {raw_response!r}")
+    logger.debug("[classify_risk] Raw response: %r", raw_response)
     level, label, reason = _parse_risk_response(raw_response)
 
     return {

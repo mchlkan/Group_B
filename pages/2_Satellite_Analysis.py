@@ -40,6 +40,46 @@ _DANGER_COLORS: dict[int, str] = {
 }
 
 
+def _download_model(model_name: str, display_name: str) -> bool:
+    """Download an Ollama model with a progress UI. Returns True on success."""
+    info_slot = st.empty()
+    info_slot.info(f"Model **{display_name}** not found locally — downloading…")
+    status_slot = st.empty()
+    progress_slot = st.empty()
+    progress_slot.progress(0.0, text="Starting download…")
+
+    for event in pull_model_stream(model_name):
+        status_text = event.get("status", "")
+        total = event.get("total", 0)
+        completed = event.get("completed", 0)
+
+        if status_text.startswith("error:"):
+            info_slot.empty()
+            status_slot.empty()
+            progress_slot.empty()
+            st.error(f"Download failed: {status_text}")
+            return False
+
+        if total and total > 0:
+            fraction = min(completed / total, 1.0)
+            mb_done = completed / 1_048_576
+            mb_total = total / 1_048_576
+            progress_slot.progress(
+                fraction,
+                text=f"Downloading {display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
+            )
+        else:
+            status_slot.text(f"⏳ {display_name}: {status_text}")
+
+        if status_text == "success":
+            info_slot.empty()
+            status_slot.empty()
+            progress_slot.empty()
+            return True
+
+    return False
+
+
 def _danger_badge(level: int, label: str) -> str:
     """Return an HTML badge for the danger level."""
     color = _DANGER_COLORS.get(level, _DANGER_COLORS[0])
@@ -148,42 +188,10 @@ def page() -> None:
             model_ready = ollama_has_model(model_name)
 
             if not model_ready:
-                info_slot = st.empty()
                 display_name = get_image_model_display_name()
-                info_slot.info(f"Model **{display_name}** not found locally — downloading…")
-                status_slot = st.empty()
-                progress_slot = st.empty()
-                progress_slot.progress(0.0, text="Starting download…")
-
-                for event in pull_model_stream(model_name):
-                    status_text = event.get("status", "")
-                    total = event.get("total", 0)
-                    completed = event.get("completed", 0)
-
-                    if status_text.startswith("error:"):
-                        info_slot.empty()
-                        status_slot.empty()
-                        progress_slot.empty()
-                        st.error(f"Download failed: {status_text}")
-                        return
-
-                    if total and total > 0:
-                        fraction = min(completed / total, 1.0)
-                        mb_done = completed / 1_048_576
-                        mb_total = total / 1_048_576
-                        progress_slot.progress(
-                            fraction,
-                            text=f"Downloading {display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
-                        )
-                    else:
-                        status_slot.text(f"⏳ {display_name}: {status_text}")
-
-                    if status_text == "success":
-                        model_ready = True
-                        info_slot.empty()
-                        status_slot.empty()
-                        progress_slot.empty()
-                        break
+                if not _download_model(model_name, display_name):
+                    return
+                model_ready = True
 
             if not model_ready:
                 st.error("Image model is not available. Cannot run analysis.")
@@ -194,42 +202,10 @@ def page() -> None:
             risk_model_ready = ollama_has_model(risk_model_name)
 
             if not risk_model_ready:
-                risk_info_slot = st.empty()
                 risk_display_name = get_risk_model_display_name()
-                risk_info_slot.info(f"Classification model **{risk_display_name}** not found locally — downloading…")
-                risk_status_slot = st.empty()
-                risk_progress_slot = st.empty()
-                risk_progress_slot.progress(0.0, text="Starting download…")
-
-                for event in pull_model_stream(risk_model_name):
-                    status_text = event.get("status", "")
-                    total = event.get("total", 0)
-                    completed = event.get("completed", 0)
-
-                    if status_text.startswith("error:"):
-                        risk_info_slot.empty()
-                        risk_status_slot.empty()
-                        risk_progress_slot.empty()
-                        st.error(f"Classification model download failed: {status_text}")
-                        return
-
-                    if total and total > 0:
-                        fraction = min(completed / total, 1.0)
-                        mb_done = completed / 1_048_576
-                        mb_total = total / 1_048_576
-                        risk_progress_slot.progress(
-                            fraction,
-                            text=f"Downloading {risk_display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
-                        )
-                    else:
-                        risk_status_slot.text(f"⏳ {risk_display_name}: {status_text}")
-
-                    if status_text == "success":
-                        risk_model_ready = True
-                        risk_info_slot.empty()
-                        risk_status_slot.empty()
-                        risk_progress_slot.empty()
-                        break
+                if not _download_model(risk_model_name, risk_display_name):
+                    return
+                risk_model_ready = True
 
             if not risk_model_ready:
                 st.error("Classification model is not available. Cannot run analysis.")
