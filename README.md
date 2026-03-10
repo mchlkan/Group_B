@@ -47,7 +47,7 @@ Group_B/
 ├── images/                 # Auto-generated folder for cached satellite images
 ├── notebooks/              # Prototyping and exploration notebooks
 ├── tests/                  # Unit tests (pytest)
-├── models.yaml             # AI model and prompt configuration (optional)
+├── models.yaml             # AI model and prompt configuration
 ├── main.py                 # Streamlit multi-page navigation entry point
 ├── requirements.txt        # pip dependencies
 ├── setup.cfg               # Linter configuration (flake8)
@@ -108,7 +108,7 @@ Implements satellite image retrieval and AI-powered environmental risk analysis 
 
 1. **Image retrieval** — `fetch_satellite_image(lat, lon, zoom)` downloads high-resolution tiles from ArcGIS World Imagery (with automatic fallback across multiple tile endpoints) and caches them in `images/`.
 2. **Image description** — `analyze_image(image_path)` sends the satellite image to a multimodal Ollama model (default: `qwen3.5:2b`) which generates a natural-language description of land cover, vegetation health, and signs of environmental degradation.
-3. **Risk classification** — `classify_risk(description)` passes the description to a text model (default: `qwen3.5:4b`) which returns a structured danger level (1–5), label, and reason.
+3. **Risk classification** — `classify_risk(description)` passes the description to a different model (default: `qwen3.5:4b`) which returns a structured danger level (1–5), label, and reason.
 4. **Persistence** (planned) — `save_analysis(...)` / `load_previous_analysis(...)` will store and retrieve results from a database.
 
 Model names, prompts, and generation options can be customised via `models.yaml`. Models are automatically downloaded on first use if not already present locally.
