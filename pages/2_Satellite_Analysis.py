@@ -12,16 +12,13 @@ import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
-from app.ai_pipeline import (
-    analyze_image,
-    fetch_satellite_image,
-    get_image_model_display_name,
-    get_image_model_name,
-    load_previous_analysis,
-    ollama_has_model,
-    pull_model_stream,
-    save_analysis,
-)
+from app.ai_pipeline import (OllamaUnavailableError, analyze_image,
+                             fetch_satellite_image,
+                             get_image_model_display_name,
+                             get_image_model_name, get_risk_model_display_name,
+                             get_risk_model_name, load_previous_analysis,
+                             ollama_has_model, pull_model_stream,
+                             save_analysis)
 
 # ------------------------------------------------------------------ #
 #  Danger-level colour mapping                                         #
@@ -35,6 +32,46 @@ _DANGER_COLORS: dict[int, str] = {
     4: "#f97316",  # orange — High
     5: "#ef4444",  # red    — Critical
 }
+
+
+def _download_model(model_name: str, display_name: str) -> bool:
+    """Download an Ollama model with a progress UI. Returns True on success."""
+    info_slot = st.empty()
+    info_slot.info(f"Model **{display_name}** not found locally — downloading…")
+    status_slot = st.empty()
+    progress_slot = st.empty()
+    progress_slot.progress(0.0, text="Starting download…")
+
+    for event in pull_model_stream(model_name):
+        status_text = event.get("status", "")
+        total = event.get("total", 0)
+        completed = event.get("completed", 0)
+
+        if status_text.startswith("error:"):
+            info_slot.empty()
+            status_slot.empty()
+            progress_slot.empty()
+            st.error(f"Download failed: {status_text}")
+            return False
+
+        if total:
+            fraction = min(completed / total, 1.0)
+            mb_done = completed / 1_048_576
+            mb_total = total / 1_048_576
+            progress_slot.progress(
+                fraction,
+                text=f"Downloading {display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
+            )
+        else:
+            status_slot.text(f"⏳ {display_name}: {status_text}")
+
+        if status_text == "success":
+            info_slot.empty()
+            status_slot.empty()
+            progress_slot.empty()
+            return True
+
+    return False
 
 
 def _danger_badge(level: int, label: str) -> str:
@@ -139,73 +176,48 @@ def page() -> None:
             _render_placeholder(latitude, longitude, zoom)
             return
 
-        st.subheader("Satellite Image")
-        st.image(image_path, use_container_width=True)
-        st.caption(f"({latitude:.4f}, {longitude:.4f}) · zoom {zoom}")
-
         # ── Model download (only when not already present) ──────── #
-        model_name = get_image_model_name()
-        model_ready = ollama_has_model(model_name)
+        try:
+            model_name = get_image_model_name()
+            model_ready = ollama_has_model(model_name)
 
-        if not model_ready:
-            info_slot = st.empty()
-            display_name = get_image_model_display_name()
-            info_slot.info(f"Model **{display_name}** not found locally — downloading…")
-            status_slot = st.empty()
-            progress_slot = st.empty()
-            progress_slot.progress(0.0, text="Starting download…")
-
-            for event in pull_model_stream(model_name):
-                status_text = event.get("status", "")
-                total = event.get("total", 0)
-                completed = event.get("completed", 0)
-
-                if status_text.startswith("error:"):
-                    info_slot.empty()
-                    status_slot.empty()
-                    progress_slot.empty()
-                    st.error(f"Download failed: {status_text}")
+            if not model_ready:
+                display_name = get_image_model_display_name()
+                if not _download_model(model_name, display_name):
                     return
 
-                if total and total > 0:
-                    fraction = min(completed / total, 1.0)
-                    mb_done = completed / 1_048_576
-                    mb_total = total / 1_048_576
-                    progress_slot.progress(
-                        fraction,
-                        text=f"{status_text} — {mb_done:.0f} MB / {mb_total:.0f} MB",
-                    )
-                else:
-                    status_slot.text(f"⏳ {status_text}")
+            # ── Risk classification model download ────────────────────── #
+            risk_model_name = get_risk_model_name()
+            risk_model_ready = ollama_has_model(risk_model_name)
 
-                if status_text == "success":
-                    model_ready = True
-                    info_slot.empty()
-                    status_slot.empty()
-                    progress_slot.empty()
-                    break
+            if not risk_model_ready:
+                risk_display_name = get_risk_model_display_name()
+                if not _download_model(risk_model_name, risk_display_name):
+                    return
 
-        if not model_ready:
-            st.error("Model is not available. Cannot run analysis.")
+            analysis_info = st.empty()
+            analysis_info.info("Running AI analysis on this image…")
+
+            with st.spinner("Running AI analysis..."):
+                analysis = analyze_image(image_path)
+
+            analysis_info.empty()
+
+            save_analysis(latitude, longitude, zoom, image_path, analysis)
+
+            st.session_state["sat_result"] = {
+                "image_path": image_path,
+                "analysis": analysis,
+                "latitude": latitude,
+                "longitude": longitude,
+                "zoom": zoom,
+            }
+        except OllamaUnavailableError as exc:
+            st.error(
+                f"**Ollama is not running.**\n\n{exc}\n\n"
+                "Please start Ollama (`ollama serve`) and try again."
+            )
             return
-
-        analysis_info = st.empty()
-        analysis_info.info("Running AI analysis on this image…")
-
-        with st.spinner("Running AI analysis..."):
-            analysis = analyze_image(image_path)
-
-        analysis_info.empty()
-
-        save_analysis(latitude, longitude, zoom, image_path, analysis)
-
-        st.session_state["sat_result"] = {
-            "image_path": image_path,
-            "analysis": analysis,
-            "latitude": latitude,
-            "longitude": longitude,
-            "zoom": zoom,
-        }
 
     result = st.session_state.get("sat_result")
     if result:
@@ -262,6 +274,10 @@ def _render_result(result: dict) -> None:
     level = analysis.get("danger_level", 0)
     label = analysis.get("danger_label", "Unknown")
     st.markdown(_danger_badge(level, label), unsafe_allow_html=True)
+
+    danger_reason = analysis.get("danger_reason", "")
+    if danger_reason:
+        st.markdown(f"**Reason:** {danger_reason}")
 
 
 page()

@@ -15,9 +15,9 @@ Scale the app with a working AI workflow (satellite image -> image description -
 - [x] Streamlit Page 2 (`pages/2_Satellite_Analysis.py`)
 - [x] Coordinate + zoom inputs 
 - [x] Clickable map for coordinate selection
-- [ ] Real ESRI World Imagery download is implemented
+- [x] Real ESRI World Imagery download is implemented
 - [x] Real Ollama image analysis is implemented
-- [ ] Real Ollama danger/risk text analysis is implemented
+- [x] Real Ollama danger/risk text analysis is implemented
 - [x] `models.yaml` exists and is used by the app
 - [ ] `database/images.csv` exists and is actively appended
 - [ ] Cache/reuse logic exists (skip pipeline if settings already processed)
@@ -30,27 +30,27 @@ Scale the app with a working AI workflow (satellite image -> image description -
 
 ## 1) AI Workflow — Task A: Image + Description
 
-- [ ] Implement `fetch_satellite_image(latitude, longitude, zoom)` in `app/ai_pipeline.py`
-- [ ] Use free ESRI World Imagery endpoint and save outputs to `images/`
-- [ ] Create deterministic image filenames (for reproducibility and cache lookup)
-- [ ] Implement `analyze_image(image_path)` with Ollama image-capable model
-- [ ] Auto-pull missing model if not installed
-- [ ] Return structured image output (`description`, `image_model`, `image_prompt`)
-- [ ] Display image + generated description together in Streamlit
+- [x] Implement `fetch_satellite_image(latitude, longitude, zoom)` in `app/ai_pipeline.py`
+- [x] Use free ESRI World Imagery endpoint and save outputs to `images/`
+- [x] Create deterministic image filenames (for reproducibility and cache lookup)
+- [x] Implement `analyze_image(image_path)` with Ollama image-capable model
+- [x] Auto-pull missing model if not installed
+- [x] Return structured image output (`description`, `image_model`, `image_prompt`)
+- [x] Display image + generated description together in Streamlit
 
 ## 2) AI Workflow — Task B: Classification
 
-- [ ] Implement second-step text risk analysis from description
-- [ ] Define internal risk questions/prompt and classify environmental danger
-- [ ] Return structured classification output (`danger_level`, `danger_label`, `danger_reason`)
-- [ ] Display clear visual risk status in Streamlit (already scaffolded, needs real data)
+- [x] Implement second-step text risk analysis from description
+- [x] Define internal risk questions/prompt and classify environmental danger
+- [x] Return structured classification output (`danger_level`, `danger_label`, `danger_reason`)
+- [x] Display clear visual risk status in Streamlit (already scaffolded, needs real data)
 
 ## 3) Data Governance
 
-- [ ] Add `models.yaml` at project root
-- [ ] Store image model settings: model name, prompt, parameters
-- [ ] Store text/risk model settings: model name, prompt, parameters
-- [ ] Load `models.yaml` in the app and use it as single source of truth
+- [x] Add `models.yaml` at project root
+- [x] Store image model settings: model name, prompt, parameters
+- [x] Store text/risk model settings: model name, prompt, parameters
+- [x] Load `models.yaml` in the app and use it as single source of truth
 - [ ] Create `database/` directory
 - [ ] Create `database/images.csv` with required columns
 - [ ] Append one row per run with timestamp + coords + zoom + models + prompts + outputs + danger

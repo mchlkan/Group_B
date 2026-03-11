@@ -39,13 +39,15 @@ Group_B/
 ├── app/
 │   ├── __init__.py
 │   ├── data.py            # OwidData class — data download, preprocessing, merging
-│   └── ai_pipeline.py     # AI/satellite pipeline stubs (fetch, analyze, store)
+│   └── ai_pipeline.py     # AI/satellite pipeline — image retrieval, description & risk classification
 ├── pages/
 │   ├── 1_Data_Explorer.py # Page 1 — interactive choropleth map and trend charts
 │   └── 2_Satellite_Analysis.py  # Page 2 — satellite imagery + AI analysis UI
 ├── downloads/              # Auto-generated folder for fetched datasets & shapefiles
+├── images/                 # Auto-generated folder for cached satellite images
 ├── notebooks/              # Prototyping and exploration notebooks
 ├── tests/                  # Unit tests (pytest)
+├── models.yaml             # AI model and prompt configuration
 ├── main.py                 # Streamlit multi-page navigation entry point
 ├── requirements.txt        # pip dependencies
 ├── setup.cfg               # Linter configuration (flake8)
@@ -85,7 +87,7 @@ The dashboard will open in your browser (default: <http://localhost:8501>).
 ### 4. Run Tests
 
 ```bash
-pytest
+python3 -m pytest tests/ -v     
 ```
 
 ---
@@ -102,16 +104,16 @@ The `OwidData` class drives the entire data pipeline:
 
 ### AI pipeline — `app/ai_pipeline.py`
 
-Defines the backend interface for the Satellite Analysis page:
+Implements satellite image retrieval and AI-powered environmental risk analysis using a local [Ollama](https://ollama.com/) instance:
 
-| Function | Purpose |
-|---|---|
-| `fetch_satellite_image(lat, lon, zoom)` | Download a satellite tile and return its local path |
-| `analyze_image(image_path)` | Send the image to an AI/LLM and return a description + danger level (1–5) |
-| `save_analysis(...)` | Persist an analysis result to a database |
-| `load_previous_analysis(lat, lon)` | Retrieve a stored analysis for a given coordinate |
+1. **Image retrieval** — `fetch_satellite_image(lat, lon, zoom)` downloads high-resolution tiles from ArcGIS World Imagery (with automatic fallback across multiple tile endpoints) and caches them in `images/`.
+2. **Image description** — `analyze_image(image_path)` sends the satellite image to a multimodal Ollama model (default: `qwen3.5:2b`) which generates a natural-language description of land cover, vegetation health, and signs of environmental degradation.
+3. **Risk classification** — `classify_risk(description)` passes the description to a different model (default: `qwen3.5:4b`) which returns a structured danger level (1–5), label, and reason.
+4. **Persistence** (planned) — `save_analysis(...)` / `load_previous_analysis(...)` will store and retrieve results from a database.
 
-> All functions are currently **stubs** — they return placeholder data so the UI renders. Teammates implement the bodies (Ollama calls, tile servers, database writes, etc.).
+Model names, prompts, and generation options can be customised via `models.yaml`. Models are automatically downloaded on first use if not already present locally.
+
+> **Prerequisite:** Ollama must be installed and running (`ollama serve`) for the AI features to work.
 
 ### Application — `main.py` + `pages/`
 
@@ -125,21 +127,25 @@ Defines the backend interface for the Satellite Analysis page:
 - `page()` — assembles the full layout: sidebar controls (dataset, year, region), choropleth map, and the panels above.
 
 **Page 2 — Satellite Analysis** (`pages/2_Satellite_Analysis.py`)
-- `page()` — coordinate input form, triggers `fetch_satellite_image` and `analyze_image`.
+- `page()` — interactive map for coordinate selection, triggers satellite image download and AI analysis via `app.ai_pipeline`.
+- `_download_model()` — handles Ollama model download with a Streamlit progress UI (auto-triggered on first use).
 - `_danger_badge()` — renders a colour-coded HTML badge for the AI danger level.
-- `_render_placeholder()` — shown while awaiting a real satellite image.
-- `_render_result()` — displays the AI description, danger score, and any stored history.
+- `_render_placeholder()` — shown when no satellite image is available.
+- `_render_result()` — displays the satellite image, AI description, and risk assessment (level, label, reason).
 
 ---
 
 ## Requirements
 
 - Python ≥ 3.11
+- [Ollama](https://ollama.com/) installed and running (`ollama serve`) for satellite AI analysis
 - See [requirements.txt](requirements.txt) for package versions:
   - `geopandas >=1.0, <2.0`
   - `pandas >=2.0, <3.0`
   - `plotly >=5.0, <6.0`
   - `streamlit >=1.35, <2.0`
+  - `PyYAML >=6.0`
+  - `Pillow`
 
 ---
 
