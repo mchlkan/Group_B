@@ -15,7 +15,11 @@ from streamlit_folium import st_folium
 from app.ai_pipeline import (
     analyze_image,
     fetch_satellite_image,
+    get_image_model_display_name,
+    get_image_model_name,
     load_previous_analysis,
+    ollama_has_model,
+    pull_model_stream,
     save_analysis,
 )
 
@@ -135,8 +139,63 @@ def page() -> None:
             _render_placeholder(latitude, longitude, zoom)
             return
 
+        st.subheader("Satellite Image")
+        st.image(image_path, use_container_width=True)
+        st.caption(f"({latitude:.4f}, {longitude:.4f}) · zoom {zoom}")
+
+        # ── Model download (only when not already present) ──────── #
+        model_name = get_image_model_name()
+        model_ready = ollama_has_model(model_name)
+
+        if not model_ready:
+            info_slot = st.empty()
+            display_name = get_image_model_display_name()
+            info_slot.info(f"Model **{display_name}** not found locally — downloading…")
+            status_slot = st.empty()
+            progress_slot = st.empty()
+            progress_slot.progress(0.0, text="Starting download…")
+
+            for event in pull_model_stream(model_name):
+                status_text = event.get("status", "")
+                total = event.get("total", 0)
+                completed = event.get("completed", 0)
+
+                if status_text.startswith("error:"):
+                    info_slot.empty()
+                    status_slot.empty()
+                    progress_slot.empty()
+                    st.error(f"Download failed: {status_text}")
+                    return
+
+                if total and total > 0:
+                    fraction = min(completed / total, 1.0)
+                    mb_done = completed / 1_048_576
+                    mb_total = total / 1_048_576
+                    progress_slot.progress(
+                        fraction,
+                        text=f"{status_text} — {mb_done:.0f} MB / {mb_total:.0f} MB",
+                    )
+                else:
+                    status_slot.text(f"⏳ {status_text}")
+
+                if status_text == "success":
+                    model_ready = True
+                    info_slot.empty()
+                    status_slot.empty()
+                    progress_slot.empty()
+                    break
+
+        if not model_ready:
+            st.error("Model is not available. Cannot run analysis.")
+            return
+
+        analysis_info = st.empty()
+        analysis_info.info("Running AI analysis on this image…")
+
         with st.spinner("Running AI analysis..."):
             analysis = analyze_image(image_path)
+
+        analysis_info.empty()
 
         save_analysis(latitude, longitude, zoom, image_path, analysis)
 

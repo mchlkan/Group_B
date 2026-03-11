@@ -8,10 +8,17 @@ can render.  Teammates will replace the bodies with real implementations
 
 from __future__ import annotations
 
+import base64
+import io
+import json
 import math
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Any, Iterator
+
+from PIL import Image
+import yaml
 
 ESRI_EXPORT_URL = (
     "https://services.arcgisonline.com/ArcGIS/rest/services/"
@@ -36,6 +43,30 @@ IMAGE_DIR = Path("images")
 
 IMAGE_SIZE_PX = 1024
 """Square image size used for exported satellite snapshots."""
+
+OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+"""Base URL for the local Ollama HTTP server."""
+
+MODELS_CONFIG_PATH = Path("models.yaml")
+"""Repository-level YAML config for AI model and prompt settings."""
+
+DEFAULT_IMAGE_MODEL = "qwen3.5:2b"
+"""Default lightweight multimodal model used for image description."""
+
+DEFAULT_IMAGE_PROMPT = (
+    "Describe this satellite image in 4-6 concise sentences. "
+    "Focus on land cover, visible human activity, vegetation, water, and any "
+    "obvious signs of deforestation, drought, fire scars, flooding, erosion, "
+    "or pollution."
+)
+"""Default prompt used for image-to-text description."""
+
+DEFAULT_IMAGE_OPTIONS: dict[str, Any] = {
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "num_predict": 80,
+}
+"""Default Ollama generation options for image description."""
 
 
 def _is_valid_input(latitude: float, longitude: float, zoom: int) -> bool:
@@ -134,13 +165,138 @@ def _download_to_path(
             output_path.write_bytes(image_bytes)
             return output_path.exists() and output_path.stat().st_size > 0
         except Exception as exc:
-            # Visible in Streamlit Cloud logs for fetch diagnostics.
+            # Keep logs concise but visible in Streamlit Cloud runtime logs.
             print(
                 f"[fetch_satellite_image] attempt={attempt}/{attempts} "
                 f"failed url={url} error={type(exc).__name__}: {exc}",
             )
 
     return False
+
+
+def _ollama_request(
+    endpoint: str,
+    payload: dict[str, Any] | None = None,
+    timeout: int = 30,
+) -> dict[str, Any] | None:
+    """Send an HTTP request to Ollama and return parsed JSON data."""
+    url = f"{OLLAMA_BASE_URL}{endpoint}"
+    method = "GET" if payload is None else "POST"
+    data = None
+    headers = {"Content-Type": "application/json"}
+
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+
+    request = urllib.request.Request(
+        url,
+        data=data,
+        headers=headers,
+        method=method,
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8").strip()
+    except Exception:
+        return None
+
+    if not raw:
+        return {}
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
+def _load_models_config() -> dict[str, Any]:
+    """Load AI workflow configuration from ``models.yaml``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Parsed configuration dictionary. Returns an empty dictionary when
+        the file is missing or invalid.
+
+    """
+    if not MODELS_CONFIG_PATH.exists():
+        return {}
+
+    try:
+        loaded = yaml.safe_load(MODELS_CONFIG_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _image_description_config() -> tuple[str, str, dict[str, Any]]:
+    """Return image description model settings from YAML with safe defaults."""
+    config = _load_models_config()
+    section = config.get("image_description", {})
+    if not isinstance(section, dict):
+        section = {}
+
+    model = str(section.get("model", DEFAULT_IMAGE_MODEL)).strip() or DEFAULT_IMAGE_MODEL
+    prompt = str(section.get("prompt", DEFAULT_IMAGE_PROMPT)).strip() or DEFAULT_IMAGE_PROMPT
+
+    options = section.get("options", DEFAULT_IMAGE_OPTIONS)
+    if not isinstance(options, dict):
+        options = DEFAULT_IMAGE_OPTIONS
+
+    return model, prompt, options
+
+
+def _encode_image_for_ollama(image_file: Path, max_size: int = 448) -> str:
+    """Return a base64 JPEG string optimized for faster multimodal inference.
+
+    The image is converted to RGB and downscaled (while preserving aspect ratio)
+    to reduce vision token cost and request size.
+    """
+    with Image.open(image_file) as img:
+        rgb_img = img.convert("RGB")
+        rgb_img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+        buffer = io.BytesIO()
+        rgb_img.save(buffer, format="JPEG", quality=85, optimize=True)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+def _ollama_has_model(model_name: str) -> bool:
+    """Return ``True`` if Ollama already has *model_name* available locally."""
+    tags = _ollama_request("/api/tags")
+    if not tags:
+        return False
+
+    models = tags.get("models", [])
+    target = model_name.strip()
+
+    for model in models:
+        local_name = str(model.get("name", "")).strip()
+        if local_name == target:
+            return True
+    return False
+
+
+def _ensure_ollama_model(model_name: str) -> bool:
+    """Ensure Ollama has *model_name*; pulls it when missing."""
+    if _ollama_has_model(model_name):
+        return True
+
+    pull_payload = {
+        "name": model_name,
+        "stream": False,
+    }
+    pulled = _ollama_request(
+        "/api/pull",
+        payload=pull_payload,
+        timeout=600,
+    )
+    if pulled is None:
+        return False
+
+    return _ollama_has_model(model_name)
 
 
 def fetch_satellite_image(
@@ -221,12 +377,114 @@ def analyze_image(image_path: str) -> dict:
         - ``"danger_label"`` (str): human-readable label, e.g. "Moderate"
 
     """
-    # TODO: implement Ollama / LLM call with the image.
+    image_file = Path(image_path)
+    if not image_file.exists() or image_file.stat().st_size == 0:
+        return {
+            "description": "Image file not found or empty.",
+            "danger_level": 0,
+            "danger_label": "Unknown",
+        }
+
+    model_name, prompt, options = _image_description_config()
+
+    if not _ensure_ollama_model(model_name):
+        return {
+            "description": (
+                "Could not access Ollama model for image description. "
+                "Check that Ollama is installed and running."
+            ),
+            "danger_level": 0,
+            "danger_label": "Unknown",
+        }
+
+    image_b64 = _encode_image_for_ollama(image_file)
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "images": [image_b64],
+        "options": options,
+        "think": False,
+        "stream": False,
+    }
+
+    result = _ollama_request(
+        "/api/generate",
+        payload=payload,
+        timeout=300,
+    )
+    if result is None:
+        return {
+            "description": (
+                "Ollama did not return a response in time. "
+                "Try reducing num_predict in models.yaml or use a smaller model."
+            ),
+            "danger_level": 0,
+            "danger_label": "Unknown",
+        }
+
+    description = str(result.get("response", "")).strip()
+    if not description:
+        description = "No description generated by the model."
+
     return {
-        "description": "Placeholder — AI analysis not yet connected.",
+        "description": description,
         "danger_level": 0,
         "danger_label": "Unknown",
     }
+
+
+def get_image_model_name() -> str:
+    """Return the configured image-description model name."""
+    model, _, _ = _image_description_config()
+    return model
+
+
+def get_image_model_display_name() -> str:
+    """Return the human-friendly display name for the image model."""
+    config = _load_models_config()
+    section = config.get("image_description", {})
+    if isinstance(section, dict) and section.get("display_name"):
+        return str(section["display_name"]).strip()
+    return get_image_model_name()
+
+
+def ollama_has_model(model_name: str) -> bool:
+    """Return ``True`` if Ollama has *model_name* available locally."""
+    return _ollama_has_model(model_name)
+
+
+def pull_model_stream(model_name: str) -> Iterator[dict]:
+    """Stream pull-progress events from Ollama for *model_name*.
+
+    Yields one ``dict`` per progress line reported by Ollama.  Each dict
+    contains at least a ``"status"`` key and optionally ``"total"`` and
+    ``"completed"`` (bytes) when a layer is being downloaded.
+
+    Yields ``{"status": "error: <msg>"}`` and stops on any failure.
+    """
+    url = f"{OLLAMA_BASE_URL}/api/pull"
+    payload = json.dumps({"name": model_name, "stream": True}).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=600) as response:
+            for raw_line in response:
+                line = raw_line.decode("utf-8").strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                yield event
+                if event.get("status") == "success":
+                    return
+    except Exception as exc:
+        yield {"status": f"error: {type(exc).__name__}: {exc}"}
 
 
 def save_analysis(
