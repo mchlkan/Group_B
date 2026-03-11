@@ -607,6 +607,8 @@ def analyze_image(image_path: str) -> dict:
 
     return {
         "description": description,
+        "image_model": model_name,
+        "image_prompt": prompt,
         "danger_level": risk["danger_level"],
         "danger_label": risk["danger_label"],
         "danger_reason": risk["danger_reason"],
@@ -711,8 +713,9 @@ def save_analysis(
         ``True`` if the record was saved successfully.
 
     """
-    # TODO: implement database insert (SQLite / PostgreSQL / etc.).
-    return False
+    from app.database import insert_analysis
+
+    return insert_analysis(latitude, longitude, zoom, image_path, analysis)
 
 
 def load_previous_analysis(
@@ -735,5 +738,6 @@ def load_previous_analysis(
         Previously saved analysis dict, or ``None`` if not found.
 
     """
-    # TODO: implement database lookup.
-    return None
+    from app.database import lookup_analysis
+
+    return lookup_analysis(latitude, longitude, zoom)

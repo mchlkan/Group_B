@@ -165,59 +165,64 @@ def page() -> None:
     # ── Analysis area ─────────────────────────────────────────────── #
 
     if analyze_btn:
-        with st.spinner("Fetching satellite image..."):
-            image_path = fetch_satellite_image(latitude, longitude, zoom)
+        cached = load_previous_analysis(latitude, longitude, zoom)
+        if cached:
+            st.info("Loaded from cache — these coordinates were already analysed.")
+            st.session_state["sat_result"] = cached
+        else:
+            with st.spinner("Fetching satellite image..."):
+                image_path = fetch_satellite_image(latitude, longitude, zoom)
 
-        if image_path is None:
-            st.warning(
-                "Could not fetch satellite image. "
-                "The image download backend is not yet connected."
-            )
-            _render_placeholder(latitude, longitude, zoom)
-            return
+            if image_path is None:
+                st.warning(
+                    "Could not fetch satellite image. "
+                    "The image download backend is not yet connected."
+                )
+                _render_placeholder(latitude, longitude, zoom)
+                return
 
-        # ── Model download (only when not already present) ──────── #
-        try:
-            model_name = get_image_model_name()
-            model_ready = ollama_has_model(model_name)
+            # ── Model download (only when not already present) ──────── #
+            try:
+                model_name = get_image_model_name()
+                model_ready = ollama_has_model(model_name)
 
-            if not model_ready:
-                display_name = get_image_model_display_name()
-                if not _download_model(model_name, display_name):
-                    return
+                if not model_ready:
+                    display_name = get_image_model_display_name()
+                    if not _download_model(model_name, display_name):
+                        return
 
-            # ── Risk classification model download ────────────────────── #
-            risk_model_name = get_risk_model_name()
-            risk_model_ready = ollama_has_model(risk_model_name)
+                # ── Risk classification model download ────────────────────── #
+                risk_model_name = get_risk_model_name()
+                risk_model_ready = ollama_has_model(risk_model_name)
 
-            if not risk_model_ready:
-                risk_display_name = get_risk_model_display_name()
-                if not _download_model(risk_model_name, risk_display_name):
-                    return
+                if not risk_model_ready:
+                    risk_display_name = get_risk_model_display_name()
+                    if not _download_model(risk_model_name, risk_display_name):
+                        return
 
-            analysis_info = st.empty()
-            analysis_info.info("Running AI analysis on this image…")
+                analysis_info = st.empty()
+                analysis_info.info("Running AI analysis on this image…")
 
-            with st.spinner("Running AI analysis..."):
-                analysis = analyze_image(image_path)
+                with st.spinner("Running AI analysis..."):
+                    analysis = analyze_image(image_path)
 
-            analysis_info.empty()
+                analysis_info.empty()
 
-            save_analysis(latitude, longitude, zoom, image_path, analysis)
+                save_analysis(latitude, longitude, zoom, image_path, analysis)
 
-            st.session_state["sat_result"] = {
-                "image_path": image_path,
-                "analysis": analysis,
-                "latitude": latitude,
-                "longitude": longitude,
-                "zoom": zoom,
-            }
-        except OllamaUnavailableError as exc:
-            st.error(
-                f"**Ollama is not running.**\n\n{exc}\n\n"
-                "Please start Ollama (`ollama serve`) and try again."
-            )
-            return
+                st.session_state["sat_result"] = {
+                    "image_path": image_path,
+                    "analysis": analysis,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "zoom": zoom,
+                }
+            except OllamaUnavailableError as exc:
+                st.error(
+                    f"**Ollama is not running.**\n\n{exc}\n\n"
+                    "Please start Ollama (`ollama serve`) and try again."
+                )
+                return
 
     result = st.session_state.get("sat_result")
     if result:
