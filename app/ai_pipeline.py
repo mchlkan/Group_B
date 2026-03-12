@@ -16,8 +16,10 @@ import math
 import re
 import urllib.parse
 import urllib.request
+from app.database import *
 from pathlib import Path
 from typing import Any, Iterator
+
 
 import yaml
 from PIL import Image
@@ -686,7 +688,6 @@ def pull_model_stream(model_name: str) -> Iterator[dict]:
     except Exception as exc:
         yield {"status": f"error: {type(exc).__name__}: {exc}"}
 
-
 def save_analysis(
     latitude: float,
     longitude: float,
@@ -713,7 +714,7 @@ def save_analysis(
         ``True`` if the record was saved successfully.
 
     """
-    from app.database import insert_analysis
+    #from app.database import insert_analysis
 
     return insert_analysis(latitude, longitude, zoom, image_path, analysis)
 
@@ -738,6 +739,6 @@ def load_previous_analysis(
         Previously saved analysis dict, or ``None`` if not found.
 
     """
-    from app.database import lookup_analysis
+    #from app.database import lookup_analysis
 
     return lookup_analysis(latitude, longitude, zoom)
