@@ -89,18 +89,41 @@ def lookup_analysis(
 ) -> dict | None:
     """Return the most recent stored result for (latitude, longitude, zoom), or None."""
     try:
+        # new code start, this will not start a new analysis if the location iw within a 1.1km to .60km radius
+        # (depends on latitude) of a previously analyzed location
+        # and a new zoom of just -+ 2 also will not start a new analysis
         init_db()
+        zoom_min = zoom-2
+        zoom_max = zoom+2
+        lat_r = round(latitude,1)
+        lon_r = round(longitude,1)
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """
-                SELECT * FROM analyses
-                WHERE latitude = ? AND longitude = ? AND zoom = ?
-                ORDER BY id DESC
-                LIMIT 1
+                SELECT *
+                FROM analyses
+                WHERE ROUND(latitude, 1) = ?
+                  AND ROUND(longitude, 1) = ?
+                  AND zoom BETWEEN ?-2 AND ?+2
+                ORDER BY id DESC LIMIT 1
                 """,
-                (latitude, longitude, zoom),
-            ).fetchone()
+            (lat_r, lon_r, zoom_min, zoom_max),
+        ).fetchone()
+        #new code end
+
+        # init_db()
+        # with sqlite3.connect(DB_PATH) as conn:
+        #     conn.row_factory = sqlite3.Row
+        #     row = conn.execute(
+        #         """
+        #         SELECT * FROM analyses
+        #         WHERE latitude = ? AND longitude = ? AND zoom = ?
+        #         ORDER BY id DESC
+        #         LIMIT 1
+        #         """,
+        #         (latitude, longitude, zoom),
+        #     ).fetchone()
     except sqlite3.Error:
         return None
 

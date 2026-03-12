@@ -171,7 +171,7 @@ def page() -> None:
             st.session_state["sat_result"] = cached
         else:
 
-            #new code start probably fixed but I need t go to bed note to self experiment tomorrow
+            #new code start
             with st.spinner("Fetching satellite image..."):
                 image_path = fetch_satellite_image(latitude, longitude, zoom)
                 analysis = analyze_image(image_path)
@@ -184,6 +184,8 @@ def page() -> None:
                     "zoom": zoom,
                 }
             #new code end
+
+            #old code
             #with st.spinner("Fetching satellite image..."):
              #   image_path = fetch_satellite_image(latitude, longitude, zoom)
 
