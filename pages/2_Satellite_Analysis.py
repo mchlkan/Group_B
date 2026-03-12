@@ -239,7 +239,7 @@ def page() -> None:
                     "Please start Ollama (`ollama serve`) and try again."
                 )
                 return
-    else: print('test if btn map moved')
+    # else: print('test if btn map moved')
     result = st.session_state.get("sat_result")
     if result:
         _render_result(result)
