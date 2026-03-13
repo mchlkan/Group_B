@@ -170,8 +170,24 @@ def page() -> None:
             st.info("Loaded from cache — these coordinates were already analysed.")
             st.session_state["sat_result"] = cached
         else:
+
+            #new code start
             with st.spinner("Fetching satellite image..."):
                 image_path = fetch_satellite_image(latitude, longitude, zoom)
+                analysis = analyze_image(image_path)
+                save_analysis(latitude, longitude, zoom, image_path, analysis)
+                st.session_state["sat_result"] = {
+                    "image_path": image_path,
+                    "analysis": analysis,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "zoom": zoom,
+                }
+            #new code end
+
+            #old code
+            #with st.spinner("Fetching satellite image..."):
+             #   image_path = fetch_satellite_image(latitude, longitude, zoom)
 
             if image_path is None:
                 st.warning(
@@ -223,7 +239,7 @@ def page() -> None:
                     "Please start Ollama (`ollama serve`) and try again."
                 )
                 return
-
+    # else: print('test if btn map moved')
     result = st.session_state.get("sat_result")
     if result:
         _render_result(result)
