@@ -88,28 +88,23 @@ def lookup_analysis(
     zoom: int,
 ) -> dict | None:
     """Return the most recent stored result for (latitude, longitude, zoom), or None.
-    If the new coordinates rounded to first decimal are the same to previously stored coordinates
-    (rounded to the first decimal place) and zoom value is within +-2 of an already stored analysis,
-    that analysis is reused."""
+        A stored analysis is reused when latitude/longitude match at 3 decimal
+        places and zoom matches exactly."""
     try:
         init_db()
-        zoom_min = zoom-2
-        zoom_max = zoom+2
-        lat_r = round(latitude,1)
-        lon_r = round(longitude,1)
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """
                 SELECT *
                 FROM analyses
-                WHERE ROUND(latitude, 1) = ?
-                  AND ROUND(longitude, 1) = ?
-                  AND zoom BETWEEN ?-2 AND ?+2
+                                WHERE ROUND(latitude, 3) = ROUND(?, 3)
+                                    AND ROUND(longitude, 3) = ROUND(?, 3)
+                                    AND zoom = ?
                 ORDER BY id DESC LIMIT 1
                 """,
-            (lat_r, lon_r, zoom_min, zoom_max),
-        ).fetchone()
+                                (latitude, longitude, zoom),
+            ).fetchone()
 
     except sqlite3.Error:
         return None
