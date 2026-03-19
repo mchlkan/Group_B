@@ -1,6 +1,6 @@
 image_description:
-  model: qwen3.5:0.8b
-  display_name: Qwen 3.5 2B
+  model: qwen3.5:4b
+  display_name: Qwen 3.5 4B
   prompt: >
     Describe this satellite image in 4-6 concise sentences.
     Focus on land cover, vegetation health and coverage, water
@@ -15,7 +15,7 @@ image_description:
     num_predict: 256
 
 risk_classification:
-  model: qwen3.5:0.8b
+  model: qwen3.5:4b
   display_name: Qwen 3.5 4B
   prompt: >
     You are an environmental risk analyst. Given the following satellite

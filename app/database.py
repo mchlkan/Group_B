@@ -103,7 +103,7 @@ def lookup_analysis(
                                     AND zoom = ?
                 ORDER BY id DESC LIMIT 1
                 """,
-                                (latitude, longitude, zoom),
+                (latitude, longitude, zoom),
             ).fetchone()
 
     except sqlite3.Error:

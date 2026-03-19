@@ -16,14 +16,14 @@ import math
 import re
 import urllib.parse
 import urllib.request
-from app.database import *
 from pathlib import Path
 from typing import Any, Iterator
 
-
-
 import yaml
 from PIL import Image
+from pydantic import BaseModel, ValidationError
+
+from app.database import insert_analysis, lookup_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,30 @@ DEFAULT_RISK_OPTIONS: dict[str, Any] = {
     "num_predict": 120,
 }
 """Default Ollama generation options for risk classification."""
+
+
+class ModelOptions(BaseModel):
+    """Pydantic model for Ollama generation options."""
+
+    temperature: float = 0.2
+    top_p: float = 0.9
+    num_predict: int = 256
+
+
+class ModelSection(BaseModel):
+    """Pydantic model for a single model configuration section."""
+
+    model: str
+    display_name: str = ""
+    prompt: str = ""
+    options: ModelOptions = ModelOptions()
+
+
+class ModelsConfig(BaseModel):
+    """Pydantic model for the top-level ``models.yaml`` schema."""
+
+    image_description: ModelSection
+    risk_classification: ModelSection
 
 
 def _is_valid_input(latitude: float, longitude: float, zoom: int) -> bool:
@@ -292,7 +316,15 @@ def _load_models_config() -> dict[str, Any]:
     except (OSError, yaml.YAMLError):
         return {}
 
-    return loaded if isinstance(loaded, dict) else {}
+    if not isinstance(loaded, dict):
+        return {}
+
+    try:
+        ModelsConfig(**loaded)
+    except ValidationError as exc:
+        logger.warning("models.yaml validation failed: %s", exc)
+
+    return loaded
 
 
 def _image_description_config() -> tuple[str, str, dict[str, Any]]:
@@ -689,6 +721,7 @@ def pull_model_stream(model_name: str) -> Iterator[dict]:
     except Exception as exc:
         yield {"status": f"error: {type(exc).__name__}: {exc}"}
 
+
 def save_analysis(
     latitude: float,
     longitude: float,
@@ -715,8 +748,6 @@ def save_analysis(
         ``True`` if the record was saved successfully.
 
     """
-    #from app.database import insert_analysis
-
     return insert_analysis(latitude, longitude, zoom, image_path, analysis)
 
 
@@ -740,6 +771,4 @@ def load_previous_analysis(
         Previously saved analysis dict, or ``None`` if not found.
 
     """
-    #from app.database import lookup_analysis
-
     return lookup_analysis(latitude, longitude, zoom)

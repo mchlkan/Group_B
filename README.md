@@ -48,7 +48,7 @@ Group_B/
 │   └── okavango.db        # SQLite database (auto-created; stores analysis results)
 ├── downloads/              # Auto-generated folder for fetched datasets & shapefiles
 ├── images/                 # Auto-generated folder for cached satellite images
-├── notebooks/              # to be removed?
+├── notebooks/              # Jupyter notebooks for exploratory analysis
 ├── tests/                  # Unit tests (pytest)
 ├── models.yaml             # AI model and prompt configuration
 ├── main.py                 # Streamlit multi-page navigation entry point
@@ -287,12 +287,33 @@ The following examples illustrate the output format of the Satellite Analysis pa
 
 ---
 
-### Example 1 — High Risk (Level 4)
+### Example 1 — Very Low Risk (Level 1)
 
-**Location:** Amazon Basin, Brazil — 3.46°S, 62.22°W, zoom 12
-**Model:** qwen3.5:2b (description) · qwen3.5:4b (classification)
+**Location:** Jämtland, Sweden — 63.47°N, 13.71°E, zoom 9
+**Model:** qwen3.5:0.8b (description) · qwen3.5:0.8b (classification)
 
-> *PASTE REAL EXAMPLE HERE*
+![Satellite image — Jämtland, Sweden](docs/examples/esri_63.4701_13.7109_z9.jpg)
+
+> This satellite image displays a densely vegetated landscape dominated by lush green forests and agricultural fields, indicating high vegetation health and coverage. Numerous dark blue water bodies—likely lakes or reservoirs—are scattered across the terrain, suggesting abundant surface water without signs of drought or flooding. There is no visible evidence of deforestation, fire scars, erosion, or pollution; natural areas appear intact and undisturbed. The overall scene reflects a stable, ecologically rich environment with minimal anthropogenic degradation. Vegetation appears uniformly healthy, with no patches of bare soil or stressed plant life evident at this resolution.
+
+**Risk Assessment**
+
+| | |
+|---|---|
+| **Level** | 1 — Very Low |
+| **Label** | Very Low |
+| **Reason** | The landscape shows a healthy, undisturbed ecosystem with no visible signs of deforestation, pollution, erosion, or drought. |
+
+---
+
+### Example 2 — High Risk (Level 4)
+
+**Location:** Chhattisgarh, India — 19.10°N, 80.95°E, zoom 9
+**Model:** qwen3.5:0.8b (description) · qwen3.5:0.8b (classification)
+
+![Satellite image — Chhattisgarh, India](docs/examples/esri_19.1036_80.9473_z9.jpg)
+
+> This satellite image shows a landscape with mixed land cover, including patches of dense green vegetation—likely forests or scrubland—and areas of brownish, bare soil suggesting drought or post-fire degradation. A winding river or stream cuts through the terrain, appearing relatively clear but possibly seasonal in flow. The contrast between lush green zones and dry, cracked earth indicates spatial variability in moisture availability or land use. Some regions show signs of deforestation or agricultural clearing, while others may reflect recent fire scars given their uniform brown tone and lack of canopy. Overall, the scene suggests an environment under stress from either climatic conditions (e.g., prolonged dry spell) or human activity, with no obvious signs of active flooding or pollution. Vegetation health appears patchy—thriving in some areas while severely degraded in others—pointing to localized environmental pressures rather than widespread catastrophe.
 
 **Risk Assessment**
 
@@ -300,41 +321,26 @@ The following examples illustrate the output format of the Satellite Analysis pa
 |---|---|
 | **Level** | 4 — High |
 | **Label** | High |
-| **Reason** | Clear environmental damage visible — active deforestation with large-scale clear-cut areas and exposed soil across much of the image. |
+| **Reason** | The presence of clear deforestation, uniform fire scars, and extensive drought-stressed vegetation indicates significant environmental degradation beyond natural variability. |
 
 ---
 
-### Example 2 — Critical Risk (Level 5)
+### Example 3 — High Risk (Level 4)
 
-**Location:** Cerrado, Mato Grosso, Brazil — 12.80°S, 51.50°W, zoom 11
-**Model:** qwen3.5:2b (description) · qwen3.5:4b (classification)
+**Location:** Mumbai, India — 19.08°N, 72.87°E, zoom 14
+**Model:** qwen3.5:0.8b (description) · qwen3.5:0.8b (classification)
 
-> *PASTE REAL EXAMPLE HERE*
+![Satellite image — Mumbai, India](docs/examples/esri_19.0845_72.8713_z14.jpg)
+
+> This satellite image shows a large airport complex surrounded by dense urban development and sparse vegetation. The land cover is dominated by concrete runways, taxiways, terminal buildings, and paved aprons, with minimal natural ground cover. Vegetation appears patchy and largely absent in the built-up zones, while scattered green patches suggest limited or stressed plant life—possibly due to urban heat or poor soil conditions. A small blue water body (likely a pond or reservoir) is visible near the terminal, indicating localized water presence but no extensive wetlands or rivers. No clear signs of active deforestation, flooding, or recent fire scars are evident; however, the overall lack of vegetative cover and presence of bare or compacted soil suggest potential environmental degradation from urban expansion and infrastructure development. Natural areas appear fragmented and under pressure from surrounding construction and population density.
 
 **Risk Assessment**
 
 | | |
 |---|---|
-| **Level** | 5 — Critical |
-| **Label** | Critical |
-| **Reason** | Severe destruction observed — large-scale fire scarring with complete vegetation loss across the majority of the image area. |
-
----
-
-### Example 3 — Moderate Risk (Level 3)
-
-**Location:** Atlantic Forest margin, São Paulo state — 23.55°S, 46.63°W, zoom 13
-**Model:** qwen3.5:2b (description) · qwen3.5:4b (classification)
-
-> *PASTE REAL EXAMPLE HERE*
-
-**Risk Assessment**
-
-| | |
-|---|---|
-| **Level** | 3 — Moderate |
-| **Label** | Moderate |
-| **Reason** | Visible signs of environmental stress — patches of cleared forest, early erosion on slopes, and road encroachment into remaining vegetation. |
+| **Level** | 4 — High |
+| **Label** | High |
+| **Reason** | The image shows severe environmental degradation caused by extensive urban expansion and infrastructure development, resulting in the complete removal of natural vegetation and replacement with concrete and paved surfaces. |
 
 ---
 
