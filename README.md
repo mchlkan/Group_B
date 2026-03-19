@@ -50,6 +50,7 @@ Group_B/
 ├── images/                 # Auto-generated folder for cached satellite images
 ├── notebooks/              # Jupyter notebooks for exploratory analysis
 ├── tests/                  # Unit tests (pytest)
+├── docs/                   # Project plans and example images
 ├── models.yaml             # AI model and prompt configuration
 ├── main.py                 # Streamlit multi-page navigation entry point
 ├── requirements.txt        # pip dependencies
@@ -125,12 +126,14 @@ The dashboard opens in your browser at <http://localhost:8501>. On first run, al
 
 ### 5. Run Tests
 
-The test suite lives in `tests/` and is split into two files with different requirements:
+The test suite lives in `tests/` and is split across four files with different requirements:
 
 | File | What it tests | Needs internet | Needs Ollama |
 |------|--------------|---------------|-------------|
 | `test_datasets.py` | `OwidData` download & merge pipeline | Yes (first run only) | No |
-| `test_ai_pipeline.py` | Pure AI pipeline helpers (parsing, filename, tile math, config loading) | No | No |
+| `test_ai_pipeline.py` | AI pipeline helpers, Pydantic model validation, mock-based public API tests | No | No |
+| `test_preprocessing.py` | Preprocessing pipeline — dedup, missing values, outlier flagging, boolean flags, input validation, `DatasetMeta` Pydantic model | No | No |
+| `test_database.py` | SQLite cache lookup matching and zoom filtering | No | No |
 
 **Run all tests:**
 
@@ -146,6 +149,12 @@ python3 -m pytest tests/test_datasets.py -v
 
 # AI pipeline unit tests only (fully offline)
 python3 -m pytest tests/test_ai_pipeline.py -v
+
+# preprocessing pipeline tests only (fully offline)
+python3 -m pytest tests/test_preprocessing.py -v
+
+# database cache tests only (fully offline)
+python3 -m pytest tests/test_database.py -v
 ```
 
 **Run with coverage report:**
@@ -164,7 +173,7 @@ python3 -m pytest tests/test_ai_pipeline.py::TestParseRiskResponse -v
 python3 -m pytest tests/test_ai_pipeline.py::TestParseRiskResponse::test_well_formed -v
 ```
 
-> **Note:** `test_datasets.py` triggers a full `OwidData()` instantiation, which downloads all five OWID CSVs and the Natural Earth shapefile into `downloads/` on first run. Subsequent runs skip the download and complete quickly. All tests in `test_ai_pipeline.py` are pure unit tests and run offline without Ollama.
+> **Note:** `test_datasets.py` triggers a full `OwidData()` instantiation, which downloads all five OWID CSVs and the Natural Earth shapefile into `downloads/` on first run. Subsequent runs skip the download and complete quickly. All tests in `test_ai_pipeline.py`, `test_preprocessing.py`, and `test_database.py` are pure unit tests and run offline without Ollama.
 
 ---
 
@@ -175,8 +184,14 @@ python3 -m pytest tests/test_ai_pipeline.py::TestParseRiskResponse::test_well_fo
 The `OwidData` class drives the entire data pipeline:
 
 1. Downloads the five OWID CSV datasets and the Natural Earth 110 m shapefile into `downloads/` (skipped if already present).
-2. Preprocesses each dataset: validates columns, auto-detects the metric column, and adds `is_aggregate` / `is_mappable` boolean flags.
-3. Merges all datasets with country geometries via GeoPandas to produce a single `GeoDataFrame` per dataset ready for mapping.
+2. Preprocesses each dataset through a multi-step pipeline:
+   - Validates required columns and auto-detects the single metric column.
+   - Enforces dtypes (`year` → `Int64`, metric → `float`).
+   - **Handles missing values** — rows with `NaN` metric values after coercion are dropped.
+   - **Removes duplicate rows** on the composite key (`entity`, `code`, `year`).
+   - Adds boolean flags: `is_aggregate` (OWID aggregate entities), `is_mappable` (valid ISO Alpha-3 codes).
+   - **Flags outliers** using the IQR method on non-aggregate rows (`is_outlier` column). Outlier rows are kept but flagged for transparency.
+3. Merges all datasets with country geometries via GeoPandas using standardised ISO Alpha-3 codes (`ISO_A3_EH` ↔ `code`), which eliminates the need for country name alignment. The world GeoDataFrame is always the left side of the join.
 
 ### AI pipeline — `app/ai_pipeline.py`
 
