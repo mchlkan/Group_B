@@ -13,7 +13,17 @@ from pathlib import Path
 from typing import Dict, Mapping, Set
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
+from pydantic import BaseModel
+
+
+class DatasetMeta(BaseModel):
+    """Pydantic-validated metadata for a single OWID dataset."""
+
+    url: str
+    label: str
+
 
 # Defining the OwidData class
 
@@ -47,41 +57,57 @@ class OwidData:
 
     # Defining class constants
 
+    DATASET_META: Dict[str, DatasetMeta] = {
+        "forest_change": DatasetMeta(
+            url=(
+                "https://ourworldindata.org/grapher/"
+                "forest-area-net-change-rate.csv"
+                "?v=1&csvType=full&useColumnShortNames=true"
+            ),
+            label="Annual Change in Forest Area",
+        ),
+        "deforestation": DatasetMeta(
+            url=(
+                "https://ourworldindata.org/grapher/"
+                "annual-deforestation.csv"
+                "?v=1&csvType=full&useColumnShortNames=true"
+            ),
+            label="Annual Deforestation",
+        ),
+        "land_protected": DatasetMeta(
+            url=(
+                "https://ourworldindata.org/grapher/"
+                "terrestrial-protected-areas.csv"
+                "?v=1&csvType=full&useColumnShortNames=true"
+            ),
+            label="Share of Protected Land",
+        ),
+        "land_degraded": DatasetMeta(
+            url=(
+                "https://ourworldindata.org/grapher/"
+                "share-degraded-land.csv"
+                "?v=1&csvType=full&useColumnShortNames=true"
+            ),
+            label="Share of Degraded Land",
+        ),
+        "marine_protected": DatasetMeta(
+            url=(
+                "https://ourworldindata.org/grapher/"
+                "marine-protected-areas.csv"
+                "?v=1&csvType=full&useColumnShortNames=true"
+            ),
+            label="Share of Marine Protected Areas",
+        ),
+    }
+    """Pydantic-validated metadata (URL + label) for each dataset."""
+
     DATASET_LABELS: Dict[str, str] = {
-        "forest_change": "Annual Change in Forest Area",
-        "deforestation": "Annual Deforestation",
-        "land_protected": "Share of Protected Land",
-        "land_degraded": "Share of Degraded Land",
-        "marine_protected": "Share of Marine Protected Areas",
+        k: v.label for k, v in DATASET_META.items()
     }
     """Human-readable labels for each dataset key."""
 
     DATASET_URLS: Dict[str, str] = {
-        "forest_change": (
-            "https://ourworldindata.org/grapher/"
-            "forest-area-net-change-rate.csv"
-            "?v=1&csvType=full&useColumnShortNames=true"
-        ),
-        "deforestation": (
-            "https://ourworldindata.org/grapher/"
-            "annual-deforestation.csv"
-            "?v=1&csvType=full&useColumnShortNames=true"
-        ),
-        "land_protected": (
-            "https://ourworldindata.org/grapher/"
-            "terrestrial-protected-areas.csv"
-            "?v=1&csvType=full&useColumnShortNames=true"
-        ),
-        "land_degraded": (
-            "https://ourworldindata.org/grapher/"
-            "share-degraded-land.csv"
-            "?v=1&csvType=full&useColumnShortNames=true"
-        ),
-        "marine_protected": (
-            "https://ourworldindata.org/grapher/"
-            "marine-protected-areas.csv"
-            "?v=1&csvType=full&useColumnShortNames=true"
-        ),
+        k: v.url for k, v in DATASET_META.items()
     }
     """URLs for the five OWID environmental datasets."""
 
@@ -100,6 +126,7 @@ class OwidData:
         "year",
         "is_aggregate",
         "is_mappable",
+        "is_outlier",
     }
     """Columns to exclude when auto-detecting the single metric column."""
 
@@ -202,17 +229,22 @@ class OwidData:
             1. Validate that required base columns are present.
             2. Auto-detect the single metric column.
             3. Enforce dtypes (``year`` → ``Int64``, metric → ``float``).
-            4. Drop duplicate rows on the composite key
+            4. Handle missing values — rows where the metric column is
+               NaN after coercion are dropped (genuinely missing
+               measurements that are not useful for analysis).
+            5. Drop duplicate rows on the composite key
                (``entity``, ``code``, ``year``).
-            5. Add boolean flags:
+            6. Add boolean flags:
                - ``is_aggregate``: ``True`` when ``code`` is missing or
                  starts with ``OWID_``.
                - ``is_mappable``: ``True`` when the row carries a valid
                  three-letter ISO Alpha-3 code suitable for a GeoPandas
                  merge.
-            6. Sort deterministically and reset the index.
-
-        Aggregate rows and statistical outliers are intentionally kept.
+            7. Flag outliers using the IQR method on non-aggregate rows.
+               Rows with metric values below ``Q1 - 1.5 * IQR`` or
+               above ``Q3 + 1.5 * IQR`` receive ``is_outlier = True``.
+               Outlier rows are kept for transparency but flagged.
+            8. Sort deterministically and reset the index.
 
         Parameters
         ----------
@@ -272,6 +304,9 @@ class OwidData:
                 float
             )
 
+            # --- handle missing values ---
+            out = out.dropna(subset=[metric_col])
+
             # --- boolean flags ---
             code_str = out["code"].astype("string")
 
@@ -284,6 +319,21 @@ class OwidData:
                 na=False,
             )
             out["is_mappable"] = ~out["is_aggregate"] & iso_like
+
+            # --- flag outliers (IQR on non-aggregate rows) ---
+            non_agg = out.loc[~out["is_aggregate"], metric_col]
+            if len(non_agg) >= 4:
+                q1 = float(np.nanpercentile(non_agg, 25))
+                q3 = float(np.nanpercentile(non_agg, 75))
+                iqr = q3 - q1
+                lower = q1 - 1.5 * iqr
+                upper = q3 + 1.5 * iqr
+                out["is_outlier"] = (
+                    ~out["is_aggregate"]
+                    & ((out[metric_col] < lower) | (out[metric_col] > upper))
+                )
+            else:
+                out["is_outlier"] = False
 
             # --- deduplicate on composite key ---
             out = out.drop_duplicates(
@@ -326,6 +376,9 @@ class OwidData:
         for name, df in self.datasets.items():
             mappable: pd.DataFrame = df[df["is_mappable"]].copy()
 
+            # Merging on standardised ISO Alpha-3 codes (ISO_A3_EH ↔ code)
+            # eliminates the need for country-name alignment / normalisation
+            # across datasets — ISO codes are the canonical join key.
             merged_gdf: gpd.GeoDataFrame = self.world.merge(
                 mappable,
                 left_on="ISO_A3_EH",

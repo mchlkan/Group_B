@@ -144,6 +144,31 @@ class ModelsConfig(BaseModel):
     risk_classification: ModelSection
 
 
+class RiskResult(BaseModel):
+    """Validated result from :func:`classify_risk`."""
+
+    danger_level: int = 0
+    danger_label: str = "Unknown"
+    danger_reason: str = ""
+    text_description: str = ""
+    text_model: str = ""
+    text_prompt: str = ""
+
+
+class AnalysisResult(BaseModel):
+    """Validated result from :func:`analyze_image`."""
+
+    description: str = ""
+    image_model: str = ""
+    image_prompt: str = ""
+    danger_level: int = 0
+    danger_label: str = "Unknown"
+    danger_reason: str = ""
+    text_description: str = ""
+    text_model: str = ""
+    text_prompt: str = ""
+
+
 def _is_valid_input(latitude: float, longitude: float, zoom: int) -> bool:
     """Return ``True`` when latitude/longitude/zoom are within bounds."""
     return (
@@ -298,73 +323,58 @@ def _ollama_request(
         return None
 
 
-def _load_models_config() -> dict[str, Any]:
-    """Load AI workflow configuration from ``models.yaml``.
+def _load_models_config() -> ModelsConfig | None:
+    """Load and validate AI workflow configuration from ``models.yaml``.
 
     Returns
     -------
-    dict[str, Any]
-        Parsed configuration dictionary. Returns an empty dictionary when
-        the file is missing or invalid.
+    ModelsConfig or None
+        A validated Pydantic configuration object, or ``None`` when the
+        file is missing, unparseable, or fails schema validation.
 
     """
     if not MODELS_CONFIG_PATH.exists():
-        return {}
+        return None
 
     try:
         loaded = yaml.safe_load(MODELS_CONFIG_PATH.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
-        return {}
+        return None
 
     if not isinstance(loaded, dict):
-        return {}
+        return None
 
     try:
-        ModelsConfig(**loaded)
+        return ModelsConfig(**loaded)
     except ValidationError as exc:
         logger.warning("models.yaml validation failed: %s", exc)
-
-    return loaded
+        return None
 
 
 def _image_description_config() -> tuple[str, str, dict[str, Any]]:
     """Return image description model settings from YAML with safe defaults."""
     config = _load_models_config()
-    section = config.get("image_description", {})
-    if not isinstance(section, dict):
-        section = {}
+    if config is not None:
+        section = config.image_description
+        model = section.model.strip() or DEFAULT_IMAGE_MODEL
+        prompt = section.prompt.strip() or DEFAULT_IMAGE_PROMPT
+        options = section.options.model_dump()
+        return model, prompt, options
 
-    model = (
-        str(section.get("model", DEFAULT_IMAGE_MODEL)).strip() or DEFAULT_IMAGE_MODEL
-    )
-    prompt = (
-        str(section.get("prompt", DEFAULT_IMAGE_PROMPT)).strip() or DEFAULT_IMAGE_PROMPT
-    )
-
-    options = section.get("options", DEFAULT_IMAGE_OPTIONS)
-    if not isinstance(options, dict):
-        options = DEFAULT_IMAGE_OPTIONS
-
-    return model, prompt, options
+    return DEFAULT_IMAGE_MODEL, DEFAULT_IMAGE_PROMPT, DEFAULT_IMAGE_OPTIONS
 
 
 def _risk_classification_config() -> tuple[str, str, dict[str, Any]]:
     """Return risk classification model settings from YAML with safe defaults."""
     config = _load_models_config()
-    section = config.get("risk_classification", {})
-    if not isinstance(section, dict):
-        section = {}
+    if config is not None:
+        section = config.risk_classification
+        model = section.model.strip() or DEFAULT_RISK_MODEL
+        prompt = section.prompt.strip() or DEFAULT_RISK_PROMPT
+        options = section.options.model_dump()
+        return model, prompt, options
 
-    model = str(section.get("model", DEFAULT_RISK_MODEL)).strip() or DEFAULT_RISK_MODEL
-    prompt = (
-        str(section.get("prompt", DEFAULT_RISK_PROMPT)).strip() or DEFAULT_RISK_PROMPT
-    )
-
-    options = section.get("options", DEFAULT_RISK_OPTIONS)
-    if not isinstance(options, dict):
-        options = DEFAULT_RISK_OPTIONS
-
-    return model, prompt, options
+    return DEFAULT_RISK_MODEL, DEFAULT_RISK_PROMPT, DEFAULT_RISK_OPTIONS
 
 
 def _encode_image_for_ollama(image_file: Path, max_size: int = 448) -> str:
@@ -520,22 +530,18 @@ def classify_risk(description: str) -> dict:
     dict
         Classification result with keys ``danger_level``, ``danger_label``,
         ``danger_reason``, ``text_description``, ``text_model``, and
-        ``text_prompt``.
+        ``text_prompt``.  Internally validated via :class:`RiskResult`.
     """
     model_name, prompt_template, options = _risk_classification_config()
     full_prompt = f"{prompt_template}\n{description}"
 
-    fallback: dict[str, Any] = {
-        "danger_level": 0,
-        "danger_label": "Unknown",
-        "danger_reason": "",
-        "text_description": "",
-        "text_model": model_name,
-        "text_prompt": full_prompt,
-    }
+    fallback = RiskResult(
+        text_model=model_name,
+        text_prompt=full_prompt,
+    )
 
     if not _ensure_ollama_model(model_name):
-        return fallback
+        return fallback.model_dump()
 
     payload = {
         "model": model_name,
@@ -548,7 +554,7 @@ def classify_risk(description: str) -> dict:
     result = _ollama_request("/api/generate", payload=payload, timeout=120)
     if result is None:
         logger.warning("[classify_risk] Ollama returned None for model=%s", model_name)
-        return fallback
+        return fallback.model_dump()
 
     raw_response = str(result.get("response", "")).strip()
     # Strip <think>...</think> blocks in case thinking mode leaked through
@@ -557,19 +563,20 @@ def classify_risk(description: str) -> dict:
     ).strip()
     if not raw_response:
         logger.warning("[classify_risk] Empty response from model")
-        return fallback
+        return fallback.model_dump()
 
     logger.debug("[classify_risk] Raw response: %r", raw_response)
     level, label, reason = _parse_risk_response(raw_response)
 
-    return {
-        "danger_level": level,
-        "danger_label": label,
-        "danger_reason": reason,
-        "text_description": raw_response,
-        "text_model": model_name,
-        "text_prompt": full_prompt,
-    }
+    validated = RiskResult(
+        danger_level=level,
+        danger_label=label,
+        danger_reason=reason,
+        text_description=raw_response,
+        text_model=model_name,
+        text_prompt=full_prompt,
+    )
+    return validated.model_dump()
 
 
 def analyze_image(image_path: str) -> dict:
@@ -583,31 +590,27 @@ def analyze_image(image_path: str) -> dict:
     Returns
     -------
     dict
-        Analysis result with keys:
-        - ``"description"`` (str): natural-language description of the image
-        - ``"danger_level"`` (int): risk score from 1 (low) to 5 (critical)
-        - ``"danger_label"`` (str): human-readable label, e.g. "Moderate"
+        Analysis result validated via :class:`AnalysisResult` with keys
+        ``description``, ``image_model``, ``image_prompt``,
+        ``danger_level``, ``danger_label``, ``danger_reason``,
+        ``text_description``, ``text_model``, and ``text_prompt``.
 
     """
     image_file = Path(image_path)
     if not image_file.exists() or image_file.stat().st_size == 0:
-        return {
-            "description": "Image file not found or empty.",
-            "danger_level": 0,
-            "danger_label": "Unknown",
-        }
+        return AnalysisResult(
+            description="Image file not found or empty.",
+        ).model_dump()
 
     model_name, prompt, options = _image_description_config()
 
     if not _ensure_ollama_model(model_name):
-        return {
-            "description": (
+        return AnalysisResult(
+            description=(
                 "Could not access Ollama model for image description. "
                 "Check that Ollama is installed and running."
             ),
-            "danger_level": 0,
-            "danger_label": "Unknown",
-        }
+        ).model_dump()
 
     image_b64 = _encode_image_for_ollama(image_file)
     payload = {
@@ -625,14 +628,12 @@ def analyze_image(image_path: str) -> dict:
         timeout=300,
     )
     if result is None:
-        return {
-            "description": (
+        return AnalysisResult(
+            description=(
                 "Ollama did not return a response in time. "
                 "Try reducing num_predict in models.yaml or use a smaller model."
             ),
-            "danger_level": 0,
-            "danger_label": "Unknown",
-        }
+        ).model_dump()
 
     description = str(result.get("response", "")).strip()
     if not description:
@@ -640,17 +641,18 @@ def analyze_image(image_path: str) -> dict:
 
     risk = classify_risk(description)
 
-    return {
-        "description": description,
-        "image_model": model_name,
-        "image_prompt": prompt,
-        "danger_level": risk["danger_level"],
-        "danger_label": risk["danger_label"],
-        "danger_reason": risk["danger_reason"],
-        "text_description": risk["text_description"],
-        "text_model": risk["text_model"],
-        "text_prompt": risk["text_prompt"],
-    }
+    validated = AnalysisResult(
+        description=description,
+        image_model=model_name,
+        image_prompt=prompt,
+        danger_level=risk["danger_level"],
+        danger_label=risk["danger_label"],
+        danger_reason=risk["danger_reason"],
+        text_description=risk["text_description"],
+        text_model=risk["text_model"],
+        text_prompt=risk["text_prompt"],
+    )
+    return validated.model_dump()
 
 
 def get_image_model_name() -> str:
@@ -662,9 +664,8 @@ def get_image_model_name() -> str:
 def get_image_model_display_name() -> str:
     """Return the human-friendly display name for the image model."""
     config = _load_models_config()
-    section = config.get("image_description", {})
-    if isinstance(section, dict) and section.get("display_name"):
-        return str(section["display_name"]).strip()
+    if config is not None and config.image_description.display_name:
+        return config.image_description.display_name.strip()
     return get_image_model_name()
 
 
@@ -677,9 +678,8 @@ def get_risk_model_name() -> str:
 def get_risk_model_display_name() -> str:
     """Return the human-friendly display name for the risk model."""
     config = _load_models_config()
-    section = config.get("risk_classification", {})
-    if isinstance(section, dict) and section.get("display_name"):
-        return str(section["display_name"]).strip()
+    if config is not None and config.risk_classification.display_name:
+        return config.risk_classification.display_name.strip()
     return get_risk_model_name()
 
 

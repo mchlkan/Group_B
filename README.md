@@ -77,11 +77,20 @@ cd Group_B
 
 ### 2. Create a Virtual Environment and Install Dependencies
 
+#### Option A: pip + venv
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate        # macOS / Linux
 # .venv\Scripts\activate         # Windows
 pip install -r requirements.txt
+```
+
+#### Option B: Conda
+
+```bash
+conda env create -f environment.yml
+conda activate okavango
 ```
 
 ### 3. Install and Start Ollama

@@ -45,7 +45,14 @@ def insert_analysis(
     image_path: str,
     analysis: dict,
 ) -> bool:
-    """Insert one analysis row. Returns True on success."""
+    """Insert one analysis row. Returns True on success.
+
+    Parameters
+    ----------
+    analysis : dict
+        Dictionary matching the :class:`~app.ai_pipeline.AnalysisResult`
+        schema (validated upstream before reaching this function).
+    """
     try:
         init_db()
         timestamp = datetime.now(timezone.utc).isoformat()
