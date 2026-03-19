@@ -60,7 +60,11 @@ def _download_model(model_name: str, display_name: str) -> bool:
             mb_total = total / 1_048_576
             progress_slot.progress(
                 fraction,
-                text=f"Downloading {display_name} — {mb_done:.0f} MB / {mb_total:.0f} MB",
+                text=(
+                    f"Downloading {display_name}"
+                    f" — {mb_done:.0f} MB"
+                    f" / {mb_total:.0f} MB"
+                ),
             )
         else:
             status_slot.text(f"⏳ {display_name}: {status_text}")
@@ -127,7 +131,10 @@ def page() -> None:
             min_value=1,
             max_value=18,
             value=10,
-            help="1 = whole world, 18 = street level. Standard range for web map tile servers (OSM, Google, Mapbox).",
+            help=(
+                "1 = whole world, 18 = street level. "
+                "Standard range for web map tile servers."
+            ),
         )
 
         analyze_btn = st.button("Analyze", type="primary", use_container_width=True)
@@ -155,7 +162,10 @@ def page() -> None:
         clicked_lon = map_data["last_clicked"]["lng"]
         clamped_lat = max(-90.0, min(90.0, round(clicked_lat, 4)))
         clamped_lon = max(-180.0, min(180.0, round(clicked_lon, 4)))
-        if clamped_lat != st.session_state["sat_lat"] or clamped_lon != st.session_state["sat_lon"]:
+        if (
+            clamped_lat != st.session_state["sat_lat"]
+            or clamped_lon != st.session_state["sat_lon"]
+        ):
             st.session_state["sat_lat"] = clamped_lat
             st.session_state["sat_lon"] = clamped_lon
             st.rerun()
@@ -223,12 +233,14 @@ def page() -> None:
                     "Please start Ollama (`ollama serve`) and try again."
                 )
                 return
-    # else: print('test if btn map moved')
     result = st.session_state.get("sat_result")
     if result:
         _render_result(result)
     elif not analyze_btn:
-        st.info("Enter coordinates in the sidebar (or click the map) and press **Analyze** to begin.")
+        st.info(
+            "Enter coordinates in the sidebar (or click the map)"
+            " and press **Analyze** to begin."
+        )
 
 
 def _render_placeholder(lat: float, lon: float, zoom: int) -> None:
@@ -238,8 +250,10 @@ def _render_placeholder(lat: float, lon: float, zoom: int) -> None:
     with img_col:
         st.subheader("Satellite Image")
         st.info(
-            f"Image placeholder for ({lat:.4f}, {lon:.4f}) at zoom {zoom}.\n\n"
-            "Connect `fetch_satellite_image()` in `app/ai_pipeline.py` to display real imagery."
+            f"Image placeholder for ({lat:.4f}, {lon:.4f}) "
+            f"at zoom {zoom}.\n\n"
+            "Connect `fetch_satellite_image()` in "
+            "`app/ai_pipeline.py` to display real imagery."
         )
 
     with desc_col:

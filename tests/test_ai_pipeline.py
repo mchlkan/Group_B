@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from app.ai_pipeline import (DEFAULT_IMAGE_MODEL, DEFAULT_IMAGE_OPTIONS,
                              DEFAULT_IMAGE_PROMPT, DEFAULT_RISK_MODEL,
                              DEFAULT_RISK_OPTIONS, DEFAULT_RISK_PROMPT,
-                             IMAGE_DIR, _bbox_for_coordinate,
+                             IMAGE_DIR, AnalysisResult, ModelsConfig,
+                             RiskResult, _bbox_for_coordinate,
                              _image_description_config, _image_filename,
                              _is_valid_input, _load_models_config,
                              _parse_risk_response, _risk_classification_config,
-                             _tile_xy_from_latlon)
+                             _tile_xy_from_latlon, analyze_image,
+                             classify_risk)
 
 # ── _is_valid_input ────────────────────────────────────────────────── #
 
@@ -155,30 +159,35 @@ class TestParseRiskResponse:
 
 
 class TestLoadModelsConfig:
-    def test_missing_file_returns_empty(self, tmp_path, monkeypatch):
+    def test_missing_file_returns_none(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
             "app.ai_pipeline.MODELS_CONFIG_PATH", tmp_path / "nope.yaml"
         )
-        assert _load_models_config() == {}
+        assert _load_models_config() is None
 
     def test_valid_yaml(self, tmp_path, monkeypatch):
         cfg = tmp_path / "models.yaml"
-        cfg.write_text("image_description:\n  model: test-model\n", encoding="utf-8")
+        cfg.write_text(
+            "image_description:\n  model: test-img\n  prompt: describe\n"
+            "risk_classification:\n  model: test-risk\n  prompt: classify\n",
+            encoding="utf-8",
+        )
         monkeypatch.setattr("app.ai_pipeline.MODELS_CONFIG_PATH", cfg)
         result = _load_models_config()
-        assert result == {"image_description": {"model": "test-model"}}
+        assert isinstance(result, ModelsConfig)
+        assert result.image_description.model == "test-img"
 
     def test_invalid_yaml(self, tmp_path, monkeypatch):
         cfg = tmp_path / "models.yaml"
         cfg.write_text(": : : not valid yaml [[", encoding="utf-8")
         monkeypatch.setattr("app.ai_pipeline.MODELS_CONFIG_PATH", cfg)
-        assert _load_models_config() == {}
+        assert _load_models_config() is None
 
     def test_non_dict_yaml(self, tmp_path, monkeypatch):
         cfg = tmp_path / "models.yaml"
         cfg.write_text("- a list\n- not a dict\n", encoding="utf-8")
         monkeypatch.setattr("app.ai_pipeline.MODELS_CONFIG_PATH", cfg)
-        assert _load_models_config() == {}
+        assert _load_models_config() is None
 
 
 # ── config helpers ────────────────────────────────────────────────── #
@@ -200,5 +209,87 @@ class TestConfigHelpers:
         )
         model, prompt, options = _risk_classification_config()
         assert model == DEFAULT_RISK_MODEL
-        assert prompt == DEFAULT_RISK_PROMPT.strip()
+        assert prompt == DEFAULT_RISK_PROMPT
         assert options == DEFAULT_RISK_OPTIONS
+
+
+# ── Pydantic model validation ────────────────────────────────────── #
+
+
+class TestPydanticValidation:
+    def test_valid_models_config(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "models.yaml"
+        cfg.write_text(
+            "image_description:\n"
+            "  model: test-img\n"
+            "  prompt: describe\n"
+            "risk_classification:\n"
+            "  model: test-risk\n"
+            "  prompt: classify\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("app.ai_pipeline.MODELS_CONFIG_PATH", cfg)
+        result = _load_models_config()
+        assert isinstance(result, ModelsConfig)
+        assert result.image_description.model == "test-img"
+        assert result.risk_classification.model == "test-risk"
+
+    def test_invalid_schema_returns_none(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "models.yaml"
+        cfg.write_text(
+            "image_description:\n  wrong_key: value\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("app.ai_pipeline.MODELS_CONFIG_PATH", cfg)
+        result = _load_models_config()
+        assert result is None
+
+    def test_risk_result_defaults(self):
+        r = RiskResult()
+        assert r.danger_level == 0
+        assert r.danger_label == "Unknown"
+
+    def test_analysis_result_fields(self):
+        a = AnalysisResult(
+            description="test",
+            danger_level=3,
+            danger_label="Moderate",
+        )
+        dump = a.model_dump()
+        assert dump["description"] == "test"
+        assert dump["danger_level"] == 3
+
+
+# ── Public API (mock-based) ──────────────────────────────────────── #
+
+
+class TestClassifyRiskMocked:
+    def test_returns_validated_dict(self):
+        mock_response = {
+            "response": "Level: 3\nLabel: Moderate\nReason: Some damage."
+        }
+        with (
+            patch("app.ai_pipeline._ensure_ollama_model", return_value=True),
+            patch(
+                "app.ai_pipeline._ollama_request", return_value=mock_response
+            ),
+        ):
+            result = classify_risk("test description")
+        assert result["danger_level"] == 3
+        assert result["danger_label"] == "Moderate"
+        assert "Some damage" in result["danger_reason"]
+
+    def test_model_unavailable_returns_fallback(self):
+        with patch(
+            "app.ai_pipeline._ensure_ollama_model", return_value=False
+        ):
+            result = classify_risk("test")
+        assert result["danger_level"] == 0
+        assert result["danger_label"] == "Unknown"
+
+
+class TestAnalyzeImageMocked:
+    def test_missing_file_returns_error(self, tmp_path):
+        result = analyze_image(str(tmp_path / "nonexistent.jpg"))
+        assert result["description"] == "Image file not found or empty."
+        assert result["danger_level"] == 0

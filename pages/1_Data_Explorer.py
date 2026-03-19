@@ -206,8 +206,8 @@ def _render_details_and_trend(
                     "No data for this country in the selected " "dataset / year.",
                 )
             else:
-                st.metric("Country", details["entity"])
-                st.metric("Region", details["region"])
+                st.metric("Country", str(details["entity"]))
+                st.metric("Region", str(details["region"]))
                 st.metric(ctx.label, f"{details['value']:.2f}")
                 st.metric("Rank", f"#{details['rank']}")
                 delta = details["delta"]
