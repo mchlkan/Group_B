@@ -1,6 +1,9 @@
-"""Tests for app.database cache lookup behavior."""
+"""Tests for app.database — cache lookup, error paths, and return structure."""
 
 from __future__ import annotations
+
+import sqlite3
+from unittest.mock import patch
 
 from app import database
 
@@ -63,3 +66,52 @@ def test_lookup_requires_exact_zoom_match(tmp_path, monkeypatch):
 
     assert hit is not None
     assert miss is None
+
+
+def test_insert_failure_returns_false(tmp_path, monkeypatch):
+    """insert_analysis returns False on sqlite3.Error."""
+    _use_tmp_db(tmp_path, monkeypatch)
+
+    with patch("sqlite3.connect", side_effect=sqlite3.Error("disk full")):
+        result = database.insert_analysis(
+            10.0, 20.0, 5, "img.jpg", _sample_analysis()
+        )
+    assert result is False
+
+
+def test_lookup_failure_returns_none(tmp_path, monkeypatch):
+    """lookup_analysis returns None on sqlite3.Error."""
+    _use_tmp_db(tmp_path, monkeypatch)
+
+    with patch("sqlite3.connect", side_effect=sqlite3.Error("locked")):
+        result = database.lookup_analysis(10.0, 20.0, 5)
+    assert result is None
+
+
+def test_lookup_returns_full_structure(tmp_path, monkeypatch):
+    """Verify the returned dict has the expected nested structure."""
+    _use_tmp_db(tmp_path, monkeypatch)
+
+    analysis = _sample_analysis()
+    database.insert_analysis(
+        38.88, -9.25, 14, "images/test.jpg", analysis
+    )
+
+    cached = database.lookup_analysis(38.88, -9.25, 14)
+    assert cached is not None
+    assert cached["image_path"] == "images/test.jpg"
+    assert cached["latitude"] == 38.88
+    assert cached["longitude"] == -9.25
+    assert cached["zoom"] == 14
+    assert cached["analysis"]["description"] == "Test description"
+    assert cached["analysis"]["danger_level"] == 2
+    assert cached["analysis"]["danger_label"] == "Low"
+    assert cached["analysis"]["danger_reason"] == "No visible damage."
+
+
+def test_lookup_no_match_returns_none(tmp_path, monkeypatch):
+    """lookup_analysis returns None when no matching row exists."""
+    _use_tmp_db(tmp_path, monkeypatch)
+    database.init_db()
+    result = database.lookup_analysis(99.0, 99.0, 1)
+    assert result is None

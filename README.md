@@ -130,10 +130,12 @@ The test suite lives in `tests/` and is split across four files with different r
 
 | File | What it tests | Needs internet | Needs Ollama |
 |------|--------------|---------------|-------------|
-| `test_datasets.py` | `OwidData` download & merge pipeline | Yes (first run only) | No |
-| `test_ai_pipeline.py` | AI pipeline helpers, Pydantic model validation, mock-based public API tests | No | No |
-| `test_preprocessing.py` | Preprocessing pipeline — dedup, missing values, outlier flagging, boolean flags, input validation, `DatasetMeta` Pydantic model | No | No |
-| `test_database.py` | SQLite cache lookup matching and zoom filtering | No | No |
+| `test_datasets.py` | `OwidData` download, merge, and helper methods (`value_column`, `available_years`, `country_data`, `top_bottom_countries`, `country_timeseries`, `country_details`) | Yes (first run only) | No |
+| `test_ai_pipeline.py` | Full AI pipeline — download, Ollama request, image encoding, model management, satellite fetch (incl. fallbacks), config loading, Pydantic validation, classify/analyze (mocked), streaming, save/load | No | No |
+| `test_preprocessing.py` | Preprocessing pipeline — dedup, missing values, outlier flagging, boolean flags, input validation, ambiguous metric columns, `DatasetMeta` Pydantic model | No | No |
+| `test_database.py` | SQLite cache — coordinate matching, zoom filtering, error handling, return structure | No | No |
+
+The test suite contains **122 tests** with **100% code coverage** across all `app/` modules.
 
 **Run all tests:**
 
