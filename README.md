@@ -4,22 +4,22 @@ A lightweight Python application for visualising global environmental indicators
 
 The tool automatically fetches the **most recent** environmental datasets from [Our World in Data](https://ourworldindata.org/), merges them with country geometries using GeoPandas, and presents the results through an interactive Streamlit dashboard powered by Plotly. A second page performs AI-powered environmental risk analysis of satellite imagery using a local [Ollama](https://ollama.com/) instance.
 
-**Live Application:** [groupb-qtqrrbbvcdclxdhjzqcrtg.streamlit.app](https://groupb-qtqrrbbvcdclxdhjzqcrtg.streamlit.app/)
-
 ## Team
 
-| Name                | Email                   |
-|---------------------|-------------------------|
-| Michael Kania       | 72782@novasbe.pt        |
-| Leon Schmidt        | 71644@novasbe.pt        |
-| Matteo De Francesco | 71734@novasbe.pt        |
-| Vanessa Weiss       | 73217@novasbe.pt        |
+| Name                | Student Number | Email            |
+|---------------------|----------------|------------------|
+| Michael Kania       | 72782          | 72782@novasbe.pt |
+| Leon Schmidt        | 71644          | 71644@novasbe.pt |
+| Matteo De Francesco | 71734          | 71734@novasbe.pt |
+| Vanessa Weiss       | 73217          | 73217@novasbe.pt |
 
 ---
 
 ## Datasets
 
 All data is downloaded automatically at runtime — nothing is hardcoded.
+
+> **Interpretation of "latest data":** In this project, we interpret "latest" as the newest dataset version currently available from Our World in Data, not just the single most recent year in the time series. We therefore keep the full dataset history and use the year slider in the Streamlit app to filter across all available years. Because OWID datasets are updated periodically rather than continuously, using the latest available OWID release is, in our view, the correct implementation of the requirement.
 
 | # | Dataset | Source |
 |---|---------|--------|
@@ -112,7 +112,7 @@ Then start the Ollama server:
 ollama serve
 ```
 
-> **Note:** The app automatically downloads the required AI models (`qwen3.5:2b` and `qwen3.5:4b`) on first use, no manual `ollama pull` is needed. Model names and prompts are configured in `models.yaml`.
+> **Note:** The app automatically downloads the required AI model (`qwen3.5:4b`) on first use, no manual `ollama pull` is needed. Model name and prompts are configured in `models.yaml`.
 >
 > The Data Explorer page works without Ollama. Only the Satellite Analysis page requires it.
 
@@ -198,9 +198,9 @@ The `OwidData` class drives the entire data pipeline:
 Implements satellite image retrieval and AI-powered environmental risk analysis using a local [Ollama](https://ollama.com/) instance:
 
 1. **Image retrieval** — `fetch_satellite_image(lat, lon, zoom)` downloads high-resolution tiles from ArcGIS World Imagery (with automatic fallback across multiple tile endpoints) and caches them in `images/`.
-2. **Image description** — `analyze_image(image_path)` sends the satellite image to a multimodal Ollama model (default: `qwen3.5:2b`) which generates a natural-language description of land cover, vegetation health, and signs of environmental degradation.
+2. **Image description** — `analyze_image(image_path)` sends the satellite image to a multimodal Ollama model (default: `qwen3.5:4b`) which generates a natural-language description of land cover, vegetation health, and signs of environmental degradation.
 3. **Risk classification** — `classify_risk(description)` passes the description to a text model (default: `qwen3.5:4b`) which returns a structured danger level (1–5), label, and reason.
-4. **Persistence** — `save_analysis(...)` / `load_previous_analysis(...)` store and retrieve results from the SQLite database. If a result already exists for the same coordinates and zoom level, it is returned immediately without calling Ollama again.
+4. **Persistence** — `save_analysis(...)` / `load_previous_analysis(...)` store and retrieve results from the SQLite database. If a result already exists for the same coordinates rounded to 3 decimal places and the same zoom level, it is returned immediately without calling Ollama again.
 
 Model names, prompts, and generation options can be customised via `models.yaml`.
 
@@ -230,7 +230,7 @@ All AI model configuration lives in `models.yaml` at the project root. Both top-
 
 ```yaml
 image_description:       # required — drives the satellite image description step
-  model: qwen3.5:2b      # Ollama model identifier
+  model: qwen3.5:4b      # Ollama model identifier
   display_name: ...      # human-readable label shown in the UI
   prompt: >              # instruction sent to the model
     Describe this satellite image...
@@ -254,7 +254,7 @@ risk_classification:     # required — drives the danger level classification s
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `model` | string | Ollama model identifier (e.g. `qwen3.5:2b`). Must be available via `ollama list` or will be auto-pulled. |
+| `model` | string | Ollama model identifier (e.g. `qwen3.5:4b`). Must be available via `ollama list` or will be auto-pulled. |
 | `display_name` | string | Human-readable name shown in the UI. |
 | `prompt` | string | System / user prompt sent to the model. |
 | `options.temperature` | float | Sampling temperature. Lower values produce more consistent outputs. |
@@ -291,7 +291,7 @@ Analysis results are persisted in a local SQLite database at `database/okavango.
 
 ### Caching behaviour
 
-Before calling Ollama, the app queries the database for an existing record matching `(latitude, longitude, zoom)`. If a match is found, the cached result is returned immediately — no model inference occurs. This makes repeated lookups of the same location instant.
+Before calling Ollama, the app queries the database for an existing record matching `(latitude, longitude, zoom)`. In the current implementation, both the analysis cache and the image-file cache use latitude and longitude rounded to 3 decimal places together with an exact zoom match. If a database match is found, the cached result is returned immediately and no model inference occurs. If no database match is found, the app proceeds with a new analysis run; however, as an edge-case safeguard, it still checks whether the corresponding satellite image file already exists under a deterministic filename such as `esri_38.678_-9.322_z10.jpg` and reuses that file instead of downloading it again. This mainly helps in situations where the image already exists but the database entry does not, such as after a partial run or manual database cleanup. When coordinates are selected from the interactive map, they are rounded to 3 decimal places before being stored in the app state.
 
 To force a fresh analysis, either change the zoom level or delete the relevant row directly from the database:
 
@@ -300,21 +300,21 @@ To force a fresh analysis, either change the zoom level or delete the relevant r
 sqlite3 database/okavango.db
 
 # delete a specific cached result
-DELETE FROM analyses WHERE latitude = -3.4653 AND longitude = -62.2159 AND zoom = 12;
+DELETE FROM analyses WHERE latitude = -3.465 AND longitude = -62.216 AND zoom = 12;
 ```
 
 ---
 
 ## Examples — Dangerous Area Detections
 
-The following examples illustrate the output format of the Satellite Analysis page across different risk levels. Results were generated by local Ollama models, the output may vary slightly depending on the model version.
+The following four examples illustrate the output format of the Satellite Analysis page across different risk levels. They include three high-risk detections and one low-risk case. Results were generated by local Ollama models, so the output may vary slightly depending on the model version.
 
 ---
 
 ### Example 1 — Very Low Risk (Level 1)
 
 **Location:** Jämtland, Sweden — 63.47°N, 13.71°E, zoom 9
-**Model:** qwen3.5:0.8b (description) · qwen3.5:0.8b (classification)
+**Model:** qwen3.5:4b (description) · qwen3.5:4b (classification)
 
 ![Satellite image — Jämtland, Sweden](docs/examples/esri_63.4701_13.7109_z9.jpg)
 
@@ -333,7 +333,7 @@ The following examples illustrate the output format of the Satellite Analysis pa
 ### Example 2 — High Risk (Level 4)
 
 **Location:** Chhattisgarh, India — 19.10°N, 80.95°E, zoom 9
-**Model:** qwen3.5:0.8b (description) · qwen3.5:0.8b (classification)
+**Model:** qwen3.5:4b (description) · qwen3.5:4b (classification)
 
 ![Satellite image — Chhattisgarh, India](docs/examples/esri_19.1036_80.9473_z9.jpg)
 
@@ -352,7 +352,7 @@ The following examples illustrate the output format of the Satellite Analysis pa
 ### Example 3 — High Risk (Level 4)
 
 **Location:** Mumbai, India — 19.08°N, 72.87°E, zoom 14
-**Model:** qwen3.5:0.8b (description) · qwen3.5:0.8b (classification)
+**Model:** qwen3.5:4b (description) · qwen3.5:4b (classification)
 
 ![Satellite image — Mumbai, India](docs/examples/esri_19.0845_72.8713_z14.jpg)
 
@@ -368,21 +368,40 @@ The following examples illustrate the output format of the Satellite Analysis pa
 
 ---
 
+### Example 4 — High Risk (Level 4)
+
+**Location:** Ahvaz, Khuzestan Province, Iran — 30.81°N, 52.94°E, zoom 10  
+**Model:** qwen3.5:4b (description) · qwen3.5:4b (classification)
+
+![Satellite image — Ahvaz, Khuzestan Province, Iran](docs/examples/esri_30.8056_52.9376_z10.jpg)
+
+> This satellite image depicts a semi-arid to arid landscape dominated by sparse, patchy vegetation with muted green tones indicating moderate stress or seasonal dormancy rather than lush health. The terrain shows extensive bare soil and eroded gullies, particularly in the lower half, suggesting active erosion likely exacerbated by lack of vegetative cover. No significant water bodies are visible; any moisture appears limited to small, localized patches near human settlements. Scattered agricultural plots show signs of cultivation but appear underperforming due to dry conditions, with some fields showing cracked or compacted soil indicative of drought stress. There is no evidence of recent fire scars or flooding, but the overall pattern suggests chronic environmental degradation from prolonged aridity and possibly overgrazing or unsustainable farming practices. Natural areas appear fragmented and degraded, with reduced canopy cover and increased exposure of underlying soil, pointing to ecological imbalance rather than intact wilderness.
+
+**Risk Assessment**
+
+| | |
+|---|---|
+| **Level** | 4 — High |
+| **Label** | High |
+| **Reason** | The landscape exhibits clear signs of active erosion through extensive gullies and chronic drought stress affecting agricultural plots and natural vegetation. |
+
+---
+
 ## Sustainability & SDG Alignment
 
 Project Okavango directly supports three United Nations Sustainable Development Goals:
 
 ### SDG 15 — Life on Land
 
-The project's core is built around SDG 15 indicators. Four of the five datasets which are, annual change in forest area, annual deforestation, share of protected land, and share of degraded land, directly measure progress (or regression) against SDG 15 targets on forest conservation, land degradation, and ecosystem protection. The AI satellite analysis layer extends this further by enabling real-time, location-specific monitoring that complements the country-level statistics. Together, the two tools give users both the macro picture (national trends over decades) and a micro lens (what is actually happening at a specific coordinate today).
+SDG 15 is the clearest and strongest match for this project. Four of the five core datasets, annual change in forest area, annual deforestation, share of protected land, and share of degraded land, directly reflect the condition of terrestrial ecosystems and progress toward land conservation goals. These indicators help users identify where forest cover is shrinking, where land degradation is increasing, and where protection efforts are succeeding or falling behind. The satellite-analysis component strengthens this further by adding location-specific image interpretation on top of the country-level statistics. Together, the app offers both a long-term macro view of environmental change and a local, case-based perspective on ecosystem stress.
 
 ### SDG 13 — Climate Action
 
-Forests are among the planet's largest carbon sinks. Deforestation and land degradation release stored carbon and reduce the Earth's capacity to absorb future emissions, making them among the most powerful drivers of climate change. By visualising deforestation trends and degraded land shares across every country, the app puts this connection front and centre for policymakers, researchers, and students. The AI risk classification system flags high-danger locations in real time, supporting early intervention before ecological tipping points are crossed.
+The project also supports SDG 13 because forest loss and land degradation are closely tied to climate change. Forests act as major carbon sinks, so deforestation not only releases stored carbon but also reduces the planet's ability to absorb future emissions. By visualising these trends across countries and over time, the app helps users understand how environmental degradation and climate risk reinforce one another. The AI-based risk classification adds another useful layer by helping users assess whether a specific area shows visible signs of drought stress, erosion, deforestation, or other forms of ecological damage linked to climate pressure.
 
 ### SDG 14 — Life Below Water
 
-Ocean health is inseparable from land use. The fifth dataset, share of marine protected areas, tracks coastal and ocean conservation directly. Beyond this, terrestrial deforestation drives sediment runoff and nutrient pollution into rivers and coastal zones, degrading coral reefs, seagrass beds, and fisheries. By surfacing both marine protection data and land degradation indicators in a single tool, the app helps users understand the land–sea feedback loop that SDG 14 depends on. Protecting forests upstream is as important to ocean health as managing marine areas directly.
+SDG 14 is relevant through both the marine dataset and the broader link between land use and water systems. The dataset on marine protected areas connects the project directly to ocean and coastal conservation. At the same time, land degradation upstream can affect rivers, estuaries, and coastal ecosystems through sediment runoff, pollution, and loss of natural buffers. By combining terrestrial and marine indicators in one application, Project Okavango encourages users to see environmental protection as an interconnected system rather than as separate land and sea issues. In that sense, protecting forests and reducing land degradation also contributes indirectly to healthier aquatic ecosystems.
 
 ---
 
@@ -390,13 +409,7 @@ Ocean health is inseparable from land use. The fifth dataset, share of marine pr
 
 - Python ≥ 3.11
 - [Ollama](https://ollama.com/) installed and running (`ollama serve`) for satellite AI analysis
-- See [requirements.txt](requirements.txt) for package versions:
-  - `geopandas >=1.0, <2.0`
-  - `pandas >=2.0, <3.0`
-  - `plotly >=5.0, <6.0`
-  - `streamlit >=1.35, <2.0`
-  - `PyYAML >=6.0`
-  - `Pillow`
+- See [requirements.txt](requirements.txt) for package versions
 
 ---
 

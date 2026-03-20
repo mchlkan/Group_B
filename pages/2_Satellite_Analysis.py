@@ -113,8 +113,8 @@ def page() -> None:
             min_value=-90.0,
             max_value=90.0,
             value=st.session_state["sat_lat"],
-            step=0.01,
-            format="%.4f",
+            step=0.001,
+            format="%.3f",
             help="Range: -90 (South Pole) to 90 (North Pole)",
         )
         longitude = st.number_input(
@@ -122,8 +122,8 @@ def page() -> None:
             min_value=-180.0,
             max_value=180.0,
             value=st.session_state["sat_lon"],
-            step=0.01,
-            format="%.4f",
+            step=0.001,
+            format="%.3f",
             help="Range: -180 (West) to 180 (East)",
         )
         zoom = st.slider(
@@ -151,7 +151,7 @@ def page() -> None:
         fill=True,
         fill_color="#e74c3c",
         fill_opacity=0.9,
-        tooltip=f"{latitude:.4f}, {longitude:.4f}",
+        tooltip=f"{latitude:.3f}, {longitude:.3f}",
     ).add_to(m)
 
     map_data = st_folium(m, height=400, width=None, key="coord_map")
@@ -160,8 +160,8 @@ def page() -> None:
     if map_data and map_data.get("last_clicked"):
         clicked_lat = map_data["last_clicked"]["lat"]
         clicked_lon = map_data["last_clicked"]["lng"]
-        clamped_lat = max(-90.0, min(90.0, round(clicked_lat, 4)))
-        clamped_lon = max(-180.0, min(180.0, round(clicked_lon, 4)))
+        clamped_lat = max(-90.0, min(90.0, round(clicked_lat, 3)))
+        clamped_lon = max(-180.0, min(180.0, round(clicked_lon, 3)))
         if (
             clamped_lat != st.session_state["sat_lat"]
             or clamped_lon != st.session_state["sat_lon"]
@@ -250,7 +250,7 @@ def _render_placeholder(lat: float, lon: float, zoom: int) -> None:
     with img_col:
         st.subheader("Satellite Image")
         st.info(
-            f"Image placeholder for ({lat:.4f}, {lon:.4f}) "
+            f"Image placeholder for ({lat:.3f}, {lon:.3f}) "
             f"at zoom {zoom}.\n\n"
             "Connect `fetch_satellite_image()` in "
             "`app/ai_pipeline.py` to display real imagery."
@@ -280,7 +280,7 @@ def _render_result(result: dict) -> None:
         st.subheader("Satellite Image")
         st.image(image_path, use_container_width=True)
         st.caption(
-            f"({result['latitude']:.4f}, {result['longitude']:.4f}) "
+            f"({result['latitude']:.3f}, {result['longitude']:.3f}) "
             f"· zoom {result['zoom']}"
         )
 
