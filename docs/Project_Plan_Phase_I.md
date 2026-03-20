@@ -113,11 +113,11 @@
 
 ## Phase 4 — Testing & Quality
 
-- [ ] `pytest` passes from project root with no errors
-- [ ] All code is PEP 8 compliant (use `flake8` or `ruff` to check)
-- [ ] Static type checking passes (use `mypy`)
-- [ ] Pydantic models used for any external data / configuration inputs
-- [ ] All functions and classes have docstrings
+- [x] `pytest` passes from project root with no errors
+- [x] All code is PEP 8 compliant (use `flake8` or `ruff` to check)
+- [x] Static type checking passes (use `mypy`)
+- [x] Pydantic models used for any external data / configuration inputs
+- [x] All functions and classes have docstrings
 
 ---
 

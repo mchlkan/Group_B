@@ -203,7 +203,8 @@ def _render_details_and_trend(
             )
             if details is None:
                 st.warning(
-                    "No data for this country in the selected " "dataset / year.",
+                    "No data for this country in the selected "
+                    "dataset / year.",
                 )
             else:
                 st.metric("Country", str(details["entity"]))
