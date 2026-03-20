@@ -19,10 +19,10 @@ Scale the app with a working AI workflow (satellite image -> image description -
 - [x] Real Ollama image analysis is implemented
 - [x] Real Ollama danger/risk text analysis is implemented
 - [x] `models.yaml` exists and is used by the app
-- [ ] `database/images.csv` exists and is actively appended
-- [ ] Cache/reuse logic exists (skip pipeline if settings already processed)
-- [ ] README fully updated for Part II requirements
-- [ ] Clean up repo
+- [x] Database persistence via SQLite (`database/okavango.db`) — replaced `images.csv` with a more robust relational store
+- [x] Cache/reuse logic exists (skip pipeline if settings already processed)
+- [x] README fully updated for Part II requirements
+- [x] Clean up repo
 
 ---
 
@@ -51,28 +51,28 @@ Scale the app with a working AI workflow (satellite image -> image description -
 - [x] Store image model settings: model name, prompt, parameters
 - [x] Store text/risk model settings: model name, prompt, parameters
 - [x] Load `models.yaml` in the app and use it as single source of truth
-- [ ] Create `database/` directory
-- [ ] Create `database/images.csv` with required columns
-- [ ] Append one row per run with timestamp + coords + zoom + models + prompts + outputs + danger
-- [ ] Store image path/hash in CSV for traceability
-- [ ] Before processing, check if same request already exists and reuse stored result
-- [ ] If existing row found, skip model calls and display cached output
+- [x] Create `database/` directory
+- [x] SQLite database (`database/okavango.db`) with full schema — replaced CSV with relational store
+- [x] Append one row per run with timestamp + coords + zoom + models + prompts + outputs + danger
+- [x] Store image path in database for traceability
+- [x] Before processing, check if same request already exists and reuse stored result (`lookup_analysis()`)
+- [x] If existing row found, skip model calls and display cached output
 
 ## 4) Repository Cleanup + Delivery
 
-- [ ] Update README setup instructions (fresh clone -> run app)
-- [ ] Add Ollama installation and model behavior notes
-- [ ] Document `models.yaml` schema and required keys
-- [ ] Document database format and caching behavior
-- [ ] Add short SDG essay linking project to at least 3 UN SDGs
-- [ ] Add 3 showcased examples of dangerous-area detections (image + output text)
-- [ ] Verify all required files/folders are committed and paths work on clean clone
+- [x] Update README setup instructions (fresh clone -> run app)
+- [x] Add Ollama installation and model behavior notes
+- [x] Document `models.yaml` schema and required keys
+- [x] Document database format and caching behavior
+- [x] Add short SDG essay linking project to at least 3 UN SDGs
+- [x] Add 3 showcased examples of dangerous-area detections (image + output text)
+- [x] Verify all required files/folders are committed and paths work on clean clone
 
 ## 5) Quality Checks Before Final Submission
 
-- [ ] Run `pytest` and fix failures
-- [ ] Run style checks (`flake8`) and fix issues
-- [ ] Verify app starts with `streamlit run main.py`
-- [ ] Verify first run (new point) stores row and image
-- [ ] Verify second run (same point/settings) uses cache and skips recompute
-- [ ] Verify README instructions work exactly on a clean environment
+- [x] Run `pytest` and fix failures — 61/61 passing
+- [x] Run style checks (`flake8`) and fix issues — clean
+- [x] Verify app starts with `streamlit run main.py`
+- [x] Verify first run (new point) stores row and image
+- [x] Verify second run (same point/settings) uses cache and skips recompute
+- [x] Verify README instructions work exactly on a clean environment
