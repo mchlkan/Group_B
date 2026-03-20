@@ -172,3 +172,18 @@ class TestInputValidation:
             OwidData.preprocess_datasets(
                 OwidData.__new__(OwidData), {"test": df}
             )
+
+    def test_ambiguous_metric_columns_raises_value_error(self):
+        df = pd.DataFrame(
+            {
+                "entity": ["A"],
+                "code": ["AAA"],
+                "year": [2020],
+                "metric_a": [1.0],
+                "metric_b": [2.0],
+            }
+        )
+        with pytest.raises(ValueError, match="expected exactly 1 metric"):
+            OwidData.preprocess_datasets(
+                OwidData.__new__(OwidData), {"test": df}
+            )
