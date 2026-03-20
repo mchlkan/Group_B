@@ -252,7 +252,7 @@ def _bbox_for_coordinate(
 
 def _image_filename(latitude: float, longitude: float, zoom: int) -> Path:
     """Return deterministic image path for a coordinate request."""
-    filename = f"esri_{latitude:.4f}_{longitude:.4f}_z{zoom}.jpg"
+    filename = f"esri_{latitude:.3f}_{longitude:.3f}_z{zoom}.jpg"
     return IMAGE_DIR / filename
 
 
