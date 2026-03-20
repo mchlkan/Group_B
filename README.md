@@ -106,7 +106,7 @@ brew install ollama
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-Then start the Ollama server:
+Then start the Ollama server in a seperate terminal:
 
 ```bash
 ollama serve
